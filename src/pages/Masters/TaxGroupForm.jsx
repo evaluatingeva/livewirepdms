@@ -7,28 +7,19 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import handleDelete from '../deleteHandler';
-import { CustomButton, StyledTableCell, StyledTableRow } from '../styledComponents';  // Import the styled components
-
-
-
+import { CustomButton, StyledTableCell, StyledTableRow } from '../styledComponents';
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-
-
-
 const TaxGroupForm = () => {
-  const [formData, setFormData] = useState({
-    taxgroupname: '',
-    deactivate: false,
+  const [formData, setFormData] = useState({ 
+    taxgroupname: '' 
   });
 
-
-
-
   const [status, setStatus] = useState(null);
+  const [editstatus, setEditStatus] = useState(null);
   const [validationError, setValidationError] = useState(null);
   const [validationErroredit, setValidationErroredit] = useState(null);
   const [tabValue, setTabValue] = useState(0);
@@ -36,24 +27,9 @@ const TaxGroupForm = () => {
   const [taxGroups, setTaxGroups] = useState([]);
   const [editingRows, setEditingRows] = useState({});
 
-
-
-
   useEffect(() => {
-    if (tabValue === 1) {
-      fetchTaxGroups();
-    }
+    if (tabValue === 1) fetchTaxGroups();
   }, [tabValue]);
-
-
-
-
-  const [createFormData, setCreateFormData] = useState({
-    taxgroupname: '',
-  });
-
-
-
 
   const fetchTaxGroups = async () => {
     try {
@@ -65,93 +41,80 @@ const TaxGroupForm = () => {
     }
   };
 
+  const handleChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setFormData({
+      ...formData,
+      [name]: type === 'checkbox' ? checked : value,
+    });
+    setStatus(null);
+    setEditStatus(null);
+    setValidationError(null);
+  };
 
-
-
-  const handleChange = (event, rowCode) => {
+  const handleEditFormChange = (event, rowCode) => {
     const { name, value, type, checked } = event.target;
     setEditingRows({
       ...editingRows,
-      [rowCode]: {
-        ...editingRows[rowCode],
-        [name]: type === 'checkbox' ? checked : value,
-      },
+      [rowCode]: { ...editingRows[rowCode], [name]: type === 'checkbox' ? checked : value },
     });
-    setStatus(null);
-    setValidationError(null);
-    setValidationErroredit(null);
+    setEditStatus(null);
   };
-
-
-
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-
-
-
-    // Validation for empty field
-    if (!createFormData.taxgroupname) {
+    if (!formData.taxgroupname) {
       setValidationError('Tax Group Name is required');
       return;
     }
 
-
-
-
-    // Validation for character limit
-    if (createFormData.taxgroupname.trim().length > 20) {
+    if (formData.taxgroupname.trim().length > 20) {
       setValidationError('Tax Group Name cannot exceed 20 characters');
       return;
     }
-
-
-
-
+    const newTax = {
+      CODE: "",
+      NAME: formData.taxgroupname.trim(),
+      RECSTAT: "A"
+    };
     try {
-      const response = await axios.post(`${TAXGRPMASTER_URL_ENDPOINT}`, {
-        CODE: "",
-        NAME: createFormData.taxgroupname.trim(),
-        RECSTAT: "A"
-      }, {
+      const response = await axios.post(`${TAXGRPMASTER_URL_ENDPOINT}`, newTax, {
         headers: {
           'Authorization': 'Basic ' + btoa('11190802:60-dayfreetrial'),
           'Content-Type': 'application/json'
         }
       });
-      setValidationError(null);
-
-
-
-
       if (response.status === 201) {
         setStatus({ type: 'success', message: 'Tax Group added successfully!' });
-        await fetchTaxGroups();
-        setCreateFormData({ taxgroupname: '' });
+        setFormData({ taxgroupname: '' });
         await sleep(1000);
         setStatus(null);
+        setEditStatus(null);
+        setValidationError(null);
       }
     } catch (error) {
-      setStatus({ type: 'error', message: 'Failed to add Tax Group.' });
+      if (error.response && error.response.status === 400) {
+        if (error.response.data === "Tax Group name already in use.") {
+          setValidationError('Tax Group Code already in use.');
+        } else {
+          setValidationError('An error occurred. Please try again.');
+        }
+      } else {
+        setValidationError('An error occurred. Please try again.');
+      }
     }
   };
-
-
-
 
   const handleEditClick = (group) => {
     const newEditingRows = { ...editingRows };
     if (!newEditingRows[group.code]) {
       newEditingRows[group.code] = {
-        taxgroupname: group.name.trim(),
+        taxgroupname: group.name,
         deactivate: group.recstat === 'D',
       };
     }
     setEditingRows(newEditingRows);
-
-
-
 
     const editTabExists = tabs.some(tab => tab.label === `Edit ${group.name}`);
     if (!editTabExists) {
@@ -161,21 +124,12 @@ const TaxGroupForm = () => {
     setTabValue(editTabIndex >= 0 ? editTabIndex : tabs.length);
   };
 
-
-
-
   const handleUpdateClick = async (rowCode) => {
-
-
     if (!editingRows[rowCode].taxgroupname.trim()) {
       setValidationErroredit('Tax Group Name is required');
       return;
     }
 
-
-
-
-    // Validation for character limit
     if (editingRows[rowCode].taxgroupname.trim().length > 20) {
       setValidationErroredit('Tax Group Name cannot exceed 20 characters');
       return;
@@ -186,29 +140,35 @@ const TaxGroupForm = () => {
       recstat: editingRows[rowCode].deactivate ? 'D' : 'A',
     };
 
-
-
-
     try {
-      await axios.put(`${TAXGRPMASTER_URL_ENDPOINT}/${rowCode}`, updatedGroup);
-      setTaxGroups(taxGroups.map(g => g.code === rowCode ? updatedGroup : g));
-      handleTabClose(rowCode);
+      const response = await axios.put(`${TAXGRPMASTER_URL_ENDPOINT}/${updatedGroup.code}`, updatedGroup, {
+        headers: {
+          'Authorization': 'Basic ' + btoa('11190802:60-dayfreetrial'),
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.status === 204) {
+        await fetchTaxGroups();
+        handleTabClose(rowCode);
+        setValidationError(null);
+      }
     } catch (error) {
-      console.error("Error updating tax group", error);
+      if (error.response && error.response.status === 400) {
+        if (error.response.data === "Tax Group already in existing record.") {
+          setEditStatus({ type: 'error', message: 'Tax Group already in existing record.' });
+        } else {
+          setValidationError('An error occurred. Please try again.');
+        }
+      } else {
+        setValidationError('An error occurred. Please try again.');
+      }
     }
   };
 
-
-
-
   const handleCancelUpdateClick = (rowCode) => {
     handleTabClose(rowCode);
-    setValidationError(null);
-    setValidationErroredit(null);
+    setEditStatus(null);
   };
-
-
-
 
   const handleTabClose = (rowCode) => {
     const tabIndex = tabs.findIndex(tab => tab.code === rowCode);
@@ -217,42 +177,28 @@ const TaxGroupForm = () => {
       const { [rowCode]: _, ...remainingRows } = prevRows;
       return remainingRows;
     });
-    setTabValue(1); // Go back to the list tab
+    setTabValue(1);
   };
-
-
-
 
   const handleCancel = () => {
-    setCreateFormData({ taxgroupname: '' });
+    setFormData({ taxgroupname: '' });
     setStatus(null);
+    setEditStatus(null);
     setValidationError(null);
-    setValidationError(null);
-    setValidationErroredit(null);
   };
-
-
-
 
   const handleEdit = () => {
-    const editTabExists = tabs.some(tab => tab.label === 'Edit Tax Groups');
+    const editTabExists = tabs.some(tab => tab.label === 'Tax Group List');
     if (!editTabExists) {
-      const newTabLabel = `Edit Tax Groups`;
-      setTabs([...tabs, { label: newTabLabel }]);
+      setTabs([...tabs, { label: 'Tax Group List' }]);
     }
-    const editTabIndex = tabs.findIndex(tab => tab.label === 'Edit Tax Groups');
+    const editTabIndex = tabs.findIndex(tab => tab.label === 'State Master List');
     setTabValue(editTabIndex >= 0 ? editTabIndex : tabs.length);
   };
-
-
-
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
-
-
-
 
   return (
     <div style={{ padding: 1 }}>
@@ -262,29 +208,29 @@ const TaxGroupForm = () => {
         ))}
       </Tabs>
 
-
-
-
       <Box p={2}>
         {tabValue === 0 && (
           <form onSubmit={handleSubmit}>
             <Paper style={{ padding: 16, marginBottom: 20 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Tax Group Details
-              </Typography>
+              <Typography variant="subtitle1" gutterBottom>Tax Group Details</Typography>
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="Tax Group Name"
                   name="taxgroupname"
-                  value={createFormData.taxgroupname}
-                  onChange={(event) => setCreateFormData({ ...createFormData, taxgroupname: event.target.value, },setValidationError(null))}
+                  value={formData.taxgroupname}
+                  onChange={handleChange}
                   variant="outlined"
                   margin="dense"
                   error={!!validationError}
                   helperText={validationError}
                 />
               </Grid>
+              {validationError && (
+                <Typography variant="body2" color="red" style={{ marginTop: 10 }}>
+                  {validationError}
+                </Typography>
+              )}
               {status && (
                 <Typography variant="body2" color={status.type === 'success' ? 'green' : 'red'} style={{ marginTop: 10 }}>
                   {status.message}
@@ -328,14 +274,9 @@ const TaxGroupForm = () => {
           </form>
         )}
 
-
-
-
         {tabValue === 1 && (
           <Paper style={{ padding: 16, marginBottom: 1 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              {tabs[tabValue].label}
-            </Typography>
+            <Typography variant="subtitle1" gutterBottom>Tax Group List</Typography>
             <TableContainer component={Paper} sx={{ maxHeight: 4000, overflowY: 'auto', borderRadius: '8px', boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)' }}>
               <Table stickyHeader sx={{ minWidth: 650, width: '100%' }}>
                 <TableHead>
@@ -384,22 +325,17 @@ const TaxGroupForm = () => {
           </Paper>
         )}
 
-
-
-
         {tabValue > 1 && tabs[tabValue] && (
           <form>
             <Paper style={{ padding: 16, marginBottom: 20 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Edit Tax Group
-              </Typography>
+              <Typography variant="subtitle1" gutterBottom>Edit Tax Group</Typography>
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="Tax Group Name"
                   name="taxgroupname"
                   value={editingRows[tabs[tabValue].code]?.taxgroupname || ''}
-                  onChange={(event) => handleChange(event, tabs[tabValue].code)}
+                  onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                   variant="outlined"
                   margin="dense"
                   error={!!validationErroredit}
@@ -411,7 +347,7 @@ const TaxGroupForm = () => {
                   control={
                     <Checkbox
                       checked={editingRows[tabs[tabValue].code]?.deactivate || false}
-                      onChange={(event) => handleChange(event, tabs[tabValue].code)}
+                      onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                       name="deactivate"
                       color="primary"
                     />
@@ -419,6 +355,11 @@ const TaxGroupForm = () => {
                   label="Deactivate?"
                 />
               </Grid>
+              {editstatus && (
+                <Typography variant="body2" color={editstatus.type === 'success' ? 'green' : 'red'} style={{ marginTop: 10 }}>
+                  {editstatus.message}
+                </Typography>
+              )}
             </Paper>
             <Box sx={{ display: 'flex', justifyContent: 'left' }}>
               <Grid container spacing={2} justifyContent="left">
@@ -451,20 +392,4 @@ const TaxGroupForm = () => {
   );
 };
 
-
-
-
 export default TaxGroupForm;
-
-
-
-
-
-
-
-
-
-
-
-
-
