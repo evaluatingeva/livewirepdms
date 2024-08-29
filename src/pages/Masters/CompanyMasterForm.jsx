@@ -9,6 +9,10 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import handleDelete from '../deleteHandler';
 import { CustomButton, StyledTableCell, StyledTableRow } from '../styledComponents';
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 const CompanyMasterForm = () => {
   const [formData, setFormData] = useState({
     statecode: '', //
@@ -56,6 +60,7 @@ const CompanyMasterForm = () => {
     comP_PREVNAME: ''
   });
   const [cityGroups, setCityGroups] = useState([]);
+  const [cityGroupsedit, setCityGroupsedit] = useState([]);
   const [states, setStates] = useState([]);
   const [status, setStatus] = useState(null);
   const [validationError, setValidationError] = useState(null);
@@ -66,10 +71,11 @@ const CompanyMasterForm = () => {
 
   useEffect(() => {
     fetchStates();
-
     if (tabValue === 1) {
       fetchCompMast();
     }
+    if(tabValue>1){ fetchStates();
+      fetchCityGroupsNORMAL();}
   }, [tabValue]);
 
   const handleGstChange = (value) => {
@@ -103,7 +109,18 @@ const CompanyMasterForm = () => {
     }));
   };
 
+  const fetchCityGroupsNORMAL = async () => {
+    try {
+      const response = await axios.get(CITYMASTER_URL_ENDPOINT);
+      console.log('Fetched City records:', response.data);
+      setCityGroupsedit(response.data);
+    } catch (error) {
+      console.error("Error fetching City records", error);
+    }
+  };
+
   const fetchCityGroups = async () => {
+    
     try {
       const response = await axios.get(CITYMASTER_URL_ENDPOINT);
 
@@ -117,10 +134,26 @@ const CompanyMasterForm = () => {
     }
   };
 
+  const fetchCityGroupsEdit = async (statecode) => {
+    
+    try {
+      const response = await axios.get(CITYMASTER_URL_ENDPOINT);
+  
+      // Filter cities based on the passed state code
+      const filteredCities = response.data.filter(city => city.statecode === statecode);
+  
+      // Update the state with the filtered cities
+      setCityGroupsedit(filteredCities);
+    } catch (error) {
+      console.error("Error fetching City records", error);
+    }
+  };
+  
   const fetchStates = async () => {
     try {
       const response = await axios.get(STATEMASTER_URL_ENDPOINT);
       setStates(response.data);
+      console.log("states" , response.data)
     } catch (error) {
       console.error("Error fetching states", error);
     }
@@ -128,7 +161,7 @@ const CompanyMasterForm = () => {
 
   const fetchCompMast = async () => {
     try {
-      const response = await axios.get(COMPMAST_URL_ENDPOINT);
+      const response = await axios.get(`${COMPMAST_URL_ENDPOINT}`);
       setCompMast(response.data);
     } catch (error) {
       console.error("Error fetching company master", error);
@@ -137,16 +170,12 @@ const CompanyMasterForm = () => {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-
-    if (tabValue === 0) {
-
       if (name === 'comP_GST') {
         handleGstChange(value);
       } else {
         setFormData({ ...formData, [name]: value});
       }
       const updatedFormData = { ...formData, [name]: value };
-
       if (name === 'comP_OAD1' || name === 'comP_OAD2' || name === 'comP_OAD3') {
         updatedFormData.comP_ADD = [updatedFormData.comP_OAD1, updatedFormData.comP_OAD2, updatedFormData.comP_OAD3]
           .filter(part => part && part.trim())
@@ -154,7 +183,6 @@ const CompanyMasterForm = () => {
           .replace(/\s+/g, ' ')
           .trim();
       }
-
       if (name === 'comP_FAD1' || name === 'comP_FAD2' || name === 'comP_FAD3') {
         updatedFormData.comP_FADD = [updatedFormData.comP_FAD1, updatedFormData.comP_FAD2, updatedFormData.comP_FAD3]
           .filter(part => part && part.trim())
@@ -162,67 +190,77 @@ const CompanyMasterForm = () => {
           .replace(/\s+/g, ' ')
           .trim();
       }
-
       setFormData(updatedFormData);
-
       if (name === 'statecode') {
         formData.statecode = value;
         fetchCityGroups();
       }
-    } else if (tabValue > 1) {
-
-      if (name === 'comP_GST') {
-        handleGstChange(value);
-      } else {
-        setEditingRows({ ...editingRows, [name]: value});
-      }
-      const updatedEditFormData = { ...editingRows[tabs[tabValue].code], [name]: value };
-
-      if (name === 'comP_OAD1' || name === 'comP_OAD2' || name === 'comP_OAD3') {
-        updatedEditFormData.comP_ADD = [updatedEditFormData.comP_OAD1, updatedEditFormData.comP_OAD2, updatedEditFormData.comP_OAD3]
-          .filter(part => part && part.trim())
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-
-      if (name === 'comP_FAD1' || name === 'comP_FAD2' || name === 'comP_FAD3') {
-        updatedEditFormData.comP_FADD = [updatedEditFormData.comP_FAD1, updatedEditFormData.comP_FAD2, updatedEditFormData.comP_FAD3]
-          .filter(part => part && part.trim())
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-
-      setEditingRows({
-        ...editingRows,
-        [tabs[tabValue].code]: updatedEditFormData,
-      });
-
-      if (name === 'statecode') {
-        editingRows[tabs[tabValue].code].statecode = value;
-        fetchCityGroups();
-      }
-    }
     setStatus(null);
     setValidationError(null);
   };
 
+  const handleEditFormChange = (event, rowCode) => {
+    const { name, value } = event.target;
+  
+    if (name === 'comP_GST') {
+      handleGstChange(value);
+    } else {
+      setEditingRows({
+        ...editingRows,
+        [rowCode]: {
+          ...editingRows[rowCode],
+          [name]: value,
+        },
+      });
+    }
+  
+    let updatedEditFormData = {
+      ...editingRows,
+      [rowCode]: {
+        ...editingRows[rowCode],
+        [name]: value,
+      },
+    };
+  
+    if (name === 'comP_OAD1' || name === 'comP_OAD2' || name === 'comP_OAD3') {
+      updatedEditFormData[rowCode].comP_ADD = [updatedEditFormData[rowCode].comP_OAD1, updatedEditFormData[rowCode].comP_OAD2, updatedEditFormData[rowCode].comP_OAD3]
+        .filter(part => part && part.trim())
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+  
+    if (name === 'comP_FAD1' || name === 'comP_FAD2' || name === 'comP_FAD3') {
+      updatedEditFormData[rowCode].comP_FADD = [updatedEditFormData[rowCode].comP_FAD1, updatedEditFormData[rowCode].comP_FAD2, updatedEditFormData[rowCode].comP_FAD3]
+        .filter(part => part && part.trim())
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+  
+    if (name === 'statecode') {
+      updatedEditFormData[rowCode].statecode = value;
+      updatedEditFormData[rowCode].comP_STATECODE = value;
+      setEditingRows({
+        ...editingRows,
+        [rowCode]: updatedEditFormData[rowCode],
+      });
+      // Pass the state code directly to fetchCityGroups
+      fetchCityGroupsEdit(value);
+    }
+  };
+  
   const handleSubmit = async (event) => {
     event.preventDefault();
-
     if (!formData.comP_NAME || !formData.comP_ACID || !formData.comP_ACFD) {
       setValidationError('Please fill in all the required fields.');
       return;
     }
-
     formData.comP_STATECODE = formData.statecode;
     formData.comP_CITYCODE = formData.citycode;
-
     const { comp_acid_year, ...formDataWithoutYear } = formData;
-
     try {
-      await axios.post(COMPMAST_URL_ENDPOINT, formDataWithoutYear, {
+      await axios.post(`${COMPMAST_URL_ENDPOINT}`, formDataWithoutYear, {
         headers: {
           'Authorization': 'Basic ' + btoa('11190802:60-dayfreetrial'),
           'Content-Type': 'application/json'
@@ -274,7 +312,7 @@ const CompanyMasterForm = () => {
         comP_REGDATE: '',
         comP_PREVNAME: ''
       });
-      fetchCompMast();
+      //fetchCompMast();
     } catch (error) {
       setStatus({ type: 'error', message: 'Failed to add Company Master.' });
     }
@@ -801,7 +839,7 @@ const CompanyMasterForm = () => {
           </Paper>
         )}
 
-        {tabValue > 1 && editingRows[tabs[tabValue].code] && (
+        {tabValue > 1 && tabs[tabValue] && (
           <form>
        <Paper style={{ padding: 16, marginBottom: 20 }}>
               <Typography variant="subtitle1" gutterBottom>
@@ -814,7 +852,7 @@ const CompanyMasterForm = () => {
                     label="Company Name"
                     name="comP_NAME"
                     value={editingRows[tabs[tabValue].code].comP_NAME}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     required
                   />
@@ -826,7 +864,7 @@ const CompanyMasterForm = () => {
                     name="comP_ACID"
                     type="datetime-local"
                     value={editingRows[tabs[tabValue].code].comP_ACID || ''}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                    
                     InputLabelProps={{
@@ -841,7 +879,7 @@ const CompanyMasterForm = () => {
                     name="comP_ACFD"
                     type="datetime-local"
                     value={editingRows[tabs[tabValue].code].comP_ACFD || ''}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                   
                     InputLabelProps={{
@@ -855,7 +893,7 @@ const CompanyMasterForm = () => {
                     label="Telephone"
                     name="comP_TELE"
                     value={editingRows[tabs[tabValue].code].comP_TELE}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                    
                   />     
@@ -866,7 +904,7 @@ const CompanyMasterForm = () => {
                     label="Legal Name"
                     name="comP_FNAM"
                     value={editingRows[tabs[tabValue].code].comP_FNAM}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     margin="dense"
                   />
@@ -877,7 +915,7 @@ const CompanyMasterForm = () => {
                     label="Email"
                     name="comP_MAIL"
                     value={editingRows[tabs[tabValue].code].comP_MAIL}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     margin="dense"
                   />
@@ -888,7 +926,7 @@ const CompanyMasterForm = () => {
                     label="URL"
                     name="comP_URL"
                     value={editingRows[tabs[tabValue].code].comP_URL}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     margin="dense"
                   />
@@ -906,7 +944,7 @@ const CompanyMasterForm = () => {
                     label="Registered Address line 1"
                     name="comP_OAD1"
                     value={editingRows[tabs[tabValue].code].comP_OAD1}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     //variant="outlined"
                     //marginleft="dense"
                     multiline
@@ -918,7 +956,7 @@ const CompanyMasterForm = () => {
                     label="Registered Address line 2"
                     name="comP_OAD2"
                     value={editingRows[tabs[tabValue].code].comP_OAD2}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     //margin="dense"
                     multiline
@@ -931,7 +969,7 @@ const CompanyMasterForm = () => {
                     label="Registered Address line 3"
                     name="comP_OAD3"
                     value={editingRows[tabs[tabValue].code].comP_OAD3}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     multiline
                   />
@@ -944,7 +982,7 @@ const CompanyMasterForm = () => {
                     label="Factory Office Address line 1"
                     name="comP_FAD1"
                     value={editingRows[tabs[tabValue].code].comP_FAD1}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                   />
                 </Grid>
@@ -954,7 +992,7 @@ const CompanyMasterForm = () => {
                     label="Factory Office Address line 2"
                     name="comP_FAD2"
                     value={editingRows[tabs[tabValue].code].comP_FAD2}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                   />
                 </Grid>
@@ -964,7 +1002,7 @@ const CompanyMasterForm = () => {
                     label="Factory Office Address line 3"
                     name="comP_FAD3"
                     value={editingRows[tabs[tabValue].code].comP_FAD3}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                   />
                 </Grid>
@@ -977,8 +1015,8 @@ const CompanyMasterForm = () => {
                       required
                       label="Select State"
                       name="statecode"
-                      value={editingRows[tabs[tabValue].code].statecode || ''}
-                      onChange={handleChange}
+                      value={editingRows[tabs[tabValue].code].comP_STATECODE || ''}
+                      onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     >
                       {states.length > 0 ? (
                         states.map((state) => (
@@ -998,13 +1036,13 @@ const CompanyMasterForm = () => {
                     <Select
                       required
                       label="Select City"
-                      name="citycode"
-                      value={editingRows[tabs[tabValue].code].citycode || ''}
+                      name="comP_CITYCODE"
+                      value={editingRows[tabs[tabValue].code].comP_CITYCODE || ''}
                       disabled={!editingRows[tabs[tabValue].code].statecode}
-                      onChange={handleChange}
+                      onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     >
-                      {cityGroups.length > 0 ? (
-                        cityGroups.map((city) => (
+                      {cityGroupsedit.length > 0 ? (
+                        cityGroupsedit.map((city) => (
                           <MenuItem key={city.code} value={city.code}>
                             {city.name}
                           </MenuItem>
@@ -1021,7 +1059,7 @@ const CompanyMasterForm = () => {
                     label="Pin"
                     name="comP_PINCODE"
                     value={editingRows[tabs[tabValue].code].comP_PINCODE}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                   />
                 </Grid>
@@ -1031,8 +1069,8 @@ const CompanyMasterForm = () => {
               <Typography variant="subtitle1" gutterBottom>Financial Information</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="GST No" name="comP_GST" value={editingRows[tabs[tabValue].code].comP_GST || ''} onChange={handleChange} variant="outlined" margin="dense" error={!!validationError} helperText={validationError || ''} />
-                  <TextField fullWidth label="PAN No" name="comP_PANO" value={editingRows[tabs[tabValue].code].comP_PANO || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="GST No" name="comP_GST" value={editingRows[tabs[tabValue].code].comP_GST || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" error={!!validationError} helperText={validationError || ''} />
+                  <TextField fullWidth label="PAN No" name="comP_PANO" value={editingRows[tabs[tabValue].code].comP_PANO || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
@@ -1041,20 +1079,20 @@ const CompanyMasterForm = () => {
                     name="comP_REGDATE"
                     type="datetime-local"
                     value={editingRows[tabs[tabValue].code].comP_REGDATE || ''}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     margin="dense"
                     InputLabelProps={{
                       shrink: true,
                     }}
                   />
-                  <TextField fullWidth label="TAN No" name="comP_TANO" value={editingRows[tabs[tabValue].code].comP_TANO || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="TAN No" name="comP_TANO" value={editingRows[tabs[tabValue].code].comP_TANO || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="CIN No" name="comP_CIN" value={editingRows[tabs[tabValue].code].comP_CIN || ''} onChange={handleChange} variant="outlined" margin="dense" />
-                  <TextField fullWidth label="MSME No" name="comP_MSMENO" value={editingRows[tabs[tabValue].code].comP_MSMENO || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="CIN No" name="comP_CIN" value={editingRows[tabs[tabValue].code].comP_CIN || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="MSME No" name="comP_MSMENO" value={editingRows[tabs[tabValue].code].comP_MSMENO || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                 <TextField
@@ -1062,7 +1100,7 @@ const CompanyMasterForm = () => {
                     label="Previous Name (if any)"
                     name="comP_PREVNAME" //change
                     value={editingRows[tabs[tabValue].code].comP_PREVNAME} //change
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     margin="dense"
                   />                  <FormControl fullWidth variant="outlined" margin="dense">
@@ -1071,7 +1109,7 @@ const CompanyMasterForm = () => {
                       label="MSME Status"
                       name="comP_MSMESTAT"
                       value={editingRows[tabs[tabValue].code].comP_MSMESTAT || ''}
-                      onChange={handleChange}
+                      onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     >
                       <MenuItem value="N.A."><em>N.A.</em></MenuItem>
                       <MenuItem value="Micro">Micro</MenuItem>
@@ -1090,18 +1128,18 @@ const CompanyMasterForm = () => {
               <Typography variant="subtitle1" gutterBottom>Bank Information</Typography>
               <Grid container spacing={2}>
                   <Grid item xs={12} sm={4}>
-                    <TextField fullWidth label="Bank Name" name="comP_BNKNAME" value={editingRows[tabs[tabValue].code].comP_BNKNAME} onChange={handleChange} variant="outlined" margin="dense"/>
+                    <TextField fullWidth label="Bank Name" name="comP_BNKNAME" value={editingRows[tabs[tabValue].code].comP_BNKNAME} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense"/>
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <TextField fullWidth label="Bank RTGS Code" name="comP_BNKRTGS" value={editingRows[tabs[tabValue].code].comP_BNKRTGS} onChange={handleChange} variant="outlined" margin="dense" />
+                    <TextField fullWidth label="Bank RTGS Code" name="comP_BNKRTGS" value={editingRows[tabs[tabValue].code].comP_BNKRTGS} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <TextField fullWidth label="Bank A/C No." name="comP_BNKAC" value={editingRows[tabs[tabValue].code].comP_BNKAC} onChange={handleChange} variant="outlined" margin="dense"/>
+                    <TextField fullWidth label="Bank A/C No." name="comP_BNKAC" value={editingRows[tabs[tabValue].code].comP_BNKAC} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense"/>
                   </Grid>
                   </Grid>
                   <Grid container spacing={2}>
                   <Grid item xs={12} >
-                    <TextField fullWidth label="Bank Addresss" name="comP_BNKADD" value={editingRows[tabs[tabValue].code].comP_BNKADD} onChange={handleChange} variant="outlined" margin="dense" multiline/>
+                    <TextField fullWidth label="Bank Addresss" name="comP_BNKADD" value={editingRows[tabs[tabValue].code].comP_BNKADD} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" multiline/>
                   </Grid>
                 </Grid>
                 {status && (
