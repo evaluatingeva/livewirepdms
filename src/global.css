@@ -1,0 +1,5 @@
+/* src/global.css */
+
+.swal2-container {
+    z-index: 1300; /* Higher than Material-UI drawers */
+  }
