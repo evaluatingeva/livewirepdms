@@ -6,42 +6,12 @@ import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import handleDelete from '../deleteHandler';  // Import the common delete handler
+import handleDelete from '../deleteHandler'; 
 import { CustomButton, StyledTableCell, StyledTableRow } from '../styledComponents';
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 const CityMasterForm = () => {
   const [formData, setFormData] = useState({
@@ -49,13 +19,6 @@ const CityMasterForm = () => {
     statecode: '',
     distance: ''
   });
-
-
-
-
-
-
-
 
   const [validationErrorstate, setValidationErrorstate] = useState(null);
   const [states, setStates] = useState([]);
@@ -69,22 +32,6 @@ const CityMasterForm = () => {
   const [cityGroups, setCityGroups] = useState([]);
   const [editingRows, setEditingRows] = useState({});
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  // Fetch states and city groups based on tab value
   useEffect(() => {
     fetchStates();
     if (tabValue === 1) {
@@ -92,43 +39,11 @@ const CityMasterForm = () => {
     }
   }, [tabValue]);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  // Mapping statecode to statename
   const stateCodeToNameMap = states.reduce((acc, state) => {
     acc[state.code] = state.name;
     return acc;
   }, {});
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  // Fetch states for the dropdown
   const fetchStates = async () => {
     try {
       const response = await axios.get(STATEMASTER_URL_ENDPOINT);
@@ -138,21 +53,6 @@ const CityMasterForm = () => {
       console.error("Error fetching states", error);
     }
   };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   const fetchCityGroups = async () => {
     try {
@@ -164,21 +64,6 @@ const CityMasterForm = () => {
     }
   };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData({ ...formData, [name]: value });
@@ -188,21 +73,6 @@ const CityMasterForm = () => {
     setValidationErrorCity(null);
     setValidationErrorstate(null);
   };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   const handleEditFormChange = (event, rowCode) => {
     const { name, value } = event.target;
@@ -217,120 +87,53 @@ const CityMasterForm = () => {
     editsetStatus(null);
   };
 
-
   const handleSubmit = async (event) => {
     event.preventDefault();
-   
     if (!formData.cityname.trim()) {
-        setValidationErrorCity('City Name is required');
-        return;
+      setValidationErrorCity('City Name is required');
+      return;
     }
     if (!formData.statecode.trim()) {
-        setValidationErrorstate('Please select the State');
-        return;
+      setValidationErrorstate('Please select the State');
+      return;
     }
-
-
     if (formData.cityname.trim().length > 50) {
-        setValidationError('City Name cannot exceed 50 characters');
-        return;
+      setValidationError('City Name cannot exceed 50 characters');
+      return;
     }
     try {
-        const response = await axios.post(`${CITYMASTER_URL_ENDPOINT}`, {
-            CODE: "",
-            NAME: formData.cityname.trim(),
-            STATECODE: formData.statecode.trim(),
-            DISTANCE: formData.distance || "0",
-        }, {
-            headers: {
-                'Authorization': 'Basic ' + btoa('11190802:60-dayfreetrial'),
-                'Content-Type': 'application/json'
-            }
-        });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        if (response.status === 201) {
-            setStatus({ type: 'success', message: 'City record added successfully!' });
-            await fetchCityGroups();
-            setFormData({ cityname: '', statecode: '', distance: '' });
-            await sleep(1000);
-            setStatus(null);
-            setValidationError(null); // Clear any existing validation error
+      const response = await axios.post(`${CITYMASTER_URL_ENDPOINT}`, {
+        CODE: "",
+        NAME: formData.cityname.trim(),
+        STATECODE: formData.statecode.trim(),
+        DISTANCE: formData.distance || "0",
+      }, {
+        headers: {
+          'Authorization': 'Basic ' + btoa('11190802:60-dayfreetrial'),
+          'Content-Type': 'application/json'
         }
+      });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      if (response.status === 201) {
+        setStatus({ type: 'success', message: 'City record added successfully!' });
+        await fetchCityGroups();
+        setFormData({ cityname: '', statecode: '', distance: '' });
+        await sleep(1000);
+        setStatus(null);
+        setValidationError(null); 
+      }
     } catch (error) {
-        if (error.response && error.response.status === 400) {
-            // Check for the specific error message from the backend
-            if (error.response.data === "City with the same name already exists in the selected state.") {
-                setValidationError('City with the same name already exists in the selected state.');
-            } else {
-                setValidationError('Failed to add City record.');
-            }
+      if (error.response && error.response.status === 400) {
+        if (error.response.data === "City with the same name already exists in the selected state.") {
+          setValidationError('City with the same name already exists in the selected state.');
         } else {
-            setStatus({ type: 'error', message: 'Failed to add City record.' });
+          setValidationError('Failed to add City record.');
         }
+      } else {
+        setStatus({ type: 'error', message: 'Failed to add City record.' });
+      }
     }
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  };
 
   const handleEditClick = (city) => {
     const newEditingRows = { ...editingRows };
@@ -342,21 +145,6 @@ const CityMasterForm = () => {
       };
     }
     setEditingRows(newEditingRows);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     const editTabExists = tabs.some(tab => tab.label === `Edit ${city.name}`);
     if (!editTabExists) {
@@ -370,140 +158,66 @@ const CityMasterForm = () => {
     setValidationErrorstate(null);
   };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   const handleUpdateClick = async (rowCode) => {
-   
     if (!editingRows[rowCode].cityname.trim()) {
       setValidationErrorCityedit('City Name is required');
       return;
-  }
-  if (!editingRows[rowCode].statecode.trim()) {
+    }
+    if (!editingRows[rowCode].statecode.trim()) {
       setValidationErrorstate('Please select the State');
       return;
-  }
-
-
-  if (editingRows[rowCode].cityname.trim().length > 50) {
+    }
+    if (editingRows[rowCode].cityname.trim().length > 50) {
       setValidationError('City Name cannot exceed 50 characters');
       return;
-  }
+    }
     const editedCity = {
-        CODE: rowCode,
-        NAME: editingRows[rowCode].cityname.trim(),
-        STATECODE: editingRows[rowCode].statecode.trim(),
-        DISTANCE: editingRows[rowCode].distance || "0",
+      CODE: rowCode,
+      NAME: editingRows[rowCode].cityname.trim(),
+      STATECODE: editingRows[rowCode].statecode.trim(),
+      DISTANCE: editingRows[rowCode].distance || "0",
     };
 
-
-    // Validate lengths before making the request
     if (
-        editedCity.CODE.length > 6 ||
-        editedCity.NAME.length > 50
+      editedCity.CODE.length > 6 ||
+      editedCity.NAME.length > 50
     ) {
-        console.error("One or more fields exceed the maximum allowed length.");
-        alert("One or more fields exceed the maximum allowed length.");
-        return;
+      console.error("One or more fields exceed the maximum allowed length.");
+      alert("One or more fields exceed the maximum allowed length.");
+      return;
     }
-
 
     try {
-        const response = await axios.put(`${CITYMASTER_URL_ENDPOINT}/${editedCity.CODE}`, editedCity, {
-            headers: {
-                'Authorization': 'Basic ' + btoa('11190802:60-dayfreetrial'),
-                'Content-Type': 'application/json'
-            }
-        });
-
-
-        if (response.status === 204) {
-            await fetchCityGroups();
-            handleTabClose(rowCode);
-            setValidationError(null); // Clear any previous validation errors
+      const response = await axios.put(`${CITYMASTER_URL_ENDPOINT}/${editedCity.CODE}`, editedCity, {
+        headers: {
+          'Authorization': 'Basic ' + btoa('11190802:60-dayfreetrial'),
+          'Content-Type': 'application/json'
         }
+      });
 
-
-
-
+      if (response.status === 204) {
+        await fetchCityGroups();
+        handleTabClose(rowCode);
+        setValidationError(null); 
+      }
     } catch (error) {
-        if (error.response && error.response.status === 400) {
-            if (error.response.data === "City with the same name already exists in the selected state.") {
-                editsetStatus({type: 'error', message: 'City with the same name already exists in the selected state.'});
-            } else {
-                editsetStatus({type: 'error', message: 'Failed to update City record.'});
-            }
+      if (error.response && error.response.status === 400) {
+        if (error.response.data === "City with the same name already exists in the selected state.") {
+          editsetStatus({ type: 'error', message: 'City with the same name already exists in the selected state.' });
         } else {
-            console.error("Error updating City record", error);
-            editsetStatus({type: 'error', message: 'Failed to update City record.'});
-
-
+          editsetStatus({ type: 'error', message: 'Failed to update City record.' });
         }
+      } else {
+        console.error("Error updating City record", error);
+        editsetStatus({ type: 'error', message: 'Failed to update City record.' });
+      }
     }
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  };
 
   const handleCancelUpdateClick = (rowCode) => {
     handleTabClose(rowCode);
     editsetStatus(null);
   };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   const handleTabClose = (rowCode) => {
     const tabIndex = tabs.findIndex(tab => tab.code === rowCode);
@@ -512,23 +226,8 @@ const CityMasterForm = () => {
       const { [rowCode]: _, ...remainingRows } = prevRows;
       return remainingRows;
     });
-    setTabValue(1); // Go back to the list tab
+    setTabValue(1); 
   };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   const handleCancel = () => {
     setFormData({ cityname: '', statecode: '', distance: '' });
@@ -539,21 +238,6 @@ const CityMasterForm = () => {
     setValidationErrorstate(null);
   };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   const handleEdit = () => {
     const listTabExists = tabs.some(tab => tab.label === 'City Master List');
     if (!listTabExists) {
@@ -563,39 +247,9 @@ const CityMasterForm = () => {
     setTabValue(listTabIndex >= 0 ? listTabIndex : tabs.length);
   };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   return (
     <div style={{ padding: 1 }}>
@@ -604,21 +258,6 @@ const CityMasterForm = () => {
           <Tab key={index} label={tab.label} />
         ))}
       </Tabs>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
       <Box p={2}>
         {tabValue === 0 && (
@@ -667,42 +306,11 @@ const CityMasterForm = () => {
                 </Grid>
               </Grid>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-              {/* Validation error message */}
               {validationError && (
                 <Typography variant="body2" color="red" style={{ marginTop: 10 }}>
                   {validationError}
                 </Typography>
               )}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
               {status && (
                 <Typography variant="body2" color={status.type === 'success' ? 'green' : 'red'} style={{ marginTop: 10 }}>
@@ -746,21 +354,6 @@ const CityMasterForm = () => {
             </Box>
           </form>
         )}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         {tabValue === 1 && (
           <Paper style={{ padding: 16, marginBottom: 1 }}>
@@ -817,7 +410,6 @@ const CityMasterForm = () => {
           </Paper>
         )}
 
-
         {tabValue > 1 && tabs[tabValue] && (
           <form>
             <Paper style={{ padding: 16, marginBottom: 20 }}>
@@ -854,12 +446,11 @@ const CityMasterForm = () => {
                       ))}
                     </Select>
                     {validationErrorstate && (
-                  <FormHelperText>{validationErrorstate}</FormHelperText>
-                )}
+                      <FormHelperText>{validationErrorstate}</FormHelperText>
+                    )}
                   </FormControl>
                 </Grid>
               </Grid>
-
 
               {editstatus && (
                 <Typography variant="body2" color={editstatus.type === 'success' ? 'green' : 'red'} style={{ marginTop: 10 }}>
@@ -893,75 +484,9 @@ const CityMasterForm = () => {
             </Box>
           </form>
         )}
-
-
       </Box>
     </div>
   );
 };
 
-
-
-
 export default CityMasterForm;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
