@@ -1,5 +1,5 @@
 // root api url
-export const rootApiUrl = "http://chanakyajha-001-site1.gtempurl.com/";
+export const rootApiUrl = "https://chanakyajha-001-site1.gtempurl.com/";
 
 // primary colors
 
