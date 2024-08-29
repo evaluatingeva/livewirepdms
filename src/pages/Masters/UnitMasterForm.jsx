@@ -12,8 +12,12 @@ import withReactContent from 'sweetalert2-react-content';
 
 const MySwal = withReactContent(Swal);
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 const UnitMasterForm = () => {
-  const [createFormData, setCreateFormData] = useState({
+  const [formData, setFormData] = useState({
     comp: "0001",
     code: "5",
     name: "",
@@ -70,8 +74,8 @@ const UnitMasterForm = () => {
     compara: ""
   });
 
-  const [editFormData, setEditFormData] = useState(null);
   const [status, setStatus] = useState(null);
+  const [editstatus, setEditStatus] = useState(null);
   const [validationError, setValidationError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
   const [tabs, setTabs] = useState([{ label: 'Unit Details' }]);
@@ -79,6 +83,7 @@ const UnitMasterForm = () => {
   const [editingRows, setEditingRows] = useState({});
   const [importFromCompanyMaster, setImportFromCompanyMaster] = useState(false);
   const [cityGroups, setCityGroups] = useState([]);
+  const [cityGroupsedit, setCityGroupsedit] = useState([]);
   const [states, setStates] = useState([]);
 
   const handleGstChange = (value) => {
@@ -105,7 +110,7 @@ const UnitMasterForm = () => {
     const pan = value.length >= 12 ? value.substring(2, 12) : '';
   
     // Update the form state with the GST number and PAN
-    setCreateFormData((prevData) => ({
+    setFormData((prevData) => ({
       ...prevData,
       gstn: value,
       pano: pan
@@ -115,8 +120,33 @@ const UnitMasterForm = () => {
   const fetchCityGroups = async () => {
     try {
       const response = await axios.get(CITYMASTER_URL_ENDPOINT);
-      const filteredCities = response.data.filter(city => city.statecode === createFormData.statecode);
+      const filteredCities = response.data.filter(city => city.statecode === formData.statecode);
       setCityGroups(filteredCities);
+    } catch (error) {
+      console.error("Error fetching City records", error);
+    }
+  };
+
+  const fetchCityGroupsNORMAL = async () => {
+    try {
+      const response = await axios.get(CITYMASTER_URL_ENDPOINT);
+      console.log('Fetched City records:', response.data);
+      setCityGroupsedit(response.data);
+    } catch (error) {
+      console.error("Error fetching City records", error);
+    }
+  };
+
+  const fetchCityGroupsEdit = async (statecode) => {
+    
+    try {
+      const response = await axios.get(CITYMASTER_URL_ENDPOINT);
+  
+      // Filter cities based on the passed state code
+      const filteredCities = response.data.filter(city => city.statecode === statecode);
+  
+      // Update the state with the filtered cities
+      setCityGroupsedit(filteredCities);
     } catch (error) {
       console.error("Error fetching City records", error);
     }
@@ -136,6 +166,8 @@ const UnitMasterForm = () => {
     if (tabValue === 1) {
       fetchUnits();
     }
+    if(tabValue>1){ fetchStates();
+      fetchCityGroupsNORMAL();}
   }, [tabValue]);
 
   const fetchUnits = async () => {
@@ -152,7 +184,7 @@ const UnitMasterForm = () => {
       const response = await axios.get(`${COMPMAST_URL_ENDPOINT}/0009`); // Ensure the ID is correct
       const companyData = response.data;
 
-      setCreateFormData(prevFormData => ({
+      setFormData(prevFormData => ({
         ...prevFormData,
         ofaD1: companyData.comP_OAD1 || '',
         ofaD2: companyData.comP_OAD2 || '',
@@ -186,7 +218,7 @@ const UnitMasterForm = () => {
     if (importFromCompanyMaster) {
       handleImportFromCompanyMaster();
     } else {
-      setCreateFormData({
+      setFormData({
         comp: "0001",
         code: "5",
         name: "",
@@ -251,31 +283,62 @@ const UnitMasterForm = () => {
     if (name === 'importFromCompanyMaster') {
       setImportFromCompanyMaster(checked);
     } else {
-      if (tabValue === 0) {
-        setCreateFormData({ ...createFormData, [name]: type === 'checkbox' ? checked : value });
-      } else if (tabValue > 1) {
-        const updatedEditFormData = { ...editingRows[tabs[tabValue].code], [name]: type === 'checkbox' ? checked : value };
-        setEditingRows({
-          ...editingRows,
-          [tabs[tabValue].code]: updatedEditFormData,
+        setFormData({ ...formData, 
+          [name]: type === 'checkbox' ? checked : value, 
         });
-      }
     }
-
     if (name === 'gstn') {
       handleGstChange(value);
     } else {
-      setCreateFormData({ ...createFormData, [name]: type === 'checkbox' ? checked : value });
+      setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
     }
-
-
     if (name === 'statecode') {
-      createFormData.statecode = value;
+      formData.statecode = value;
       fetchCityGroups();
     }
-
     setStatus(null);
+    setEditStatus(null);
+    setValidationError(null);
   };
+
+  const handleEditFormChange = (event, rowCode) => {
+    const { name, value } = event.target;
+  
+    // Ensure all fields are preserved and only the specific field is updated
+    setEditingRows((prevEditingRows) => ({
+      ...prevEditingRows,
+      [rowCode]: {
+        ...prevEditingRows[rowCode],
+        [name]: value,
+      },
+    }));
+  
+    // Handle special case for GST number
+    if (name === 'gstn') {
+      handleGstChange(value);
+    }
+    let updatedEditFormData = {
+      ...editingRows,
+      [rowCode]: {
+        ...editingRows[rowCode],
+        [name]: value,
+      },
+    };
+    // If state code is changed, fetch corresponding cities
+    if (name === 'statecode') {
+      updatedEditFormData[rowCode].statecode = value;
+      updatedEditFormData[rowCode].comP_STATECODE = value;
+      setEditingRows({
+        ...editingRows,
+        [rowCode]: updatedEditFormData[rowCode],
+      });
+      // Pass the state code directly to fetchCityGroups
+      fetchCityGroupsEdit(value);// Fetch cities based on the new state code
+    }
+  
+    setEditStatus(null);
+  };
+  
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -284,19 +347,142 @@ const UnitMasterForm = () => {
       setStatus({ type: 'error', message: 'Please fix the errors before submitting.' });
       return;
     }
-
+    const newUnit= {
+      COMP: formData.comp,
+      CODE: formData.code,
+      NAME: formData.name,
+      FADD: formData.fadd,
+      PHNO: formData.phno,
+      EMAL: formData.emal,
+      URL: formData.url,
+      TANO: formData.tano,
+      PANO: formData.pano,
+      BLNO: formData.blno,
+      DFAD1: formData.dfaD1,
+      DFAD2: formData.dfaD2,
+      DFAD3: formData.dfaD3,
+      EXTRA1: formData.extrA1,
+      EXTRA2: formData.extrA2,
+      EXTRA3: formData.extrA3,
+      EXTRA4: formData.extrA4,
+      EXTRA5: formData.extrA5,
+      LOGO: formData.logo,
+      LOGOBASE64: formData.logoBase64,
+      INSDET: formData.insdet,
+      INVHEAD: formData.invhead,
+      NOTI: formData.noti,
+      ACTIVE: formData.active,
+      PKGVER: formData.pkgver,
+      CINNO: formData.cinno,
+      OFAD1: formData.ofaD1,
+      OFAD2: formData.ofaD2,
+      OFAD3: formData.ofaD3,
+      ISEXPORTUNIT: formData.isexportunit,
+      SIGN: formData.sign,
+      CITYCOD: formData.citycod,
+      DPF_ADD: formData.dpF_ADD,
+      ADD_ACOM: formData.adD_ACOM,
+      ADD_SUP: formData.adD_SUP,
+      ADD_DCOM: formData.adD_DCOM,
+      RMK1: formData.rmK1,
+      RMK2: formData.rmK2,
+      RMK3: formData.rmK3,
+      SHORTNAME: formData.shortname,
+      GSTN: formData.gstn,
+      STATECODE: formData.statecode,
+      STATECOD: formData.statecod,
+      PINNO: formData.pinno,
+      CITYCODE: formData.citycode,
+      BANKDET1: formData.bankdeT1,
+      BANKDET2: formData.bankdeT2,
+      BANKDET3: formData.bankdeT3,
+      BANKDET4: formData.bankdeT4,
+      REGDATE: formData.regdate,
+      MSMENO: formData.msmeno,
+      MSMESTAT: formData.msmestat,
+      LEGNAME: formData.legname,
+      COMPARA: formData.compara,
+    };
     try {
-      await axios.post(`${UNITMASTER_URL_ENDPOINT}`, createFormData, {
+      const response = await axios.post(`${UNITMASTER_URL_ENDPOINT}`, newUnit, {
         headers: {
           'Authorization': 'Basic ' + btoa('11190802:60-dayfreetrial'),
           'Content-Type': 'application/json'
         }
       });
-      setStatus({ type: 'success', message: 'Unit added successfully!' });
-      handleCancel();
-      fetchUnits();
+      if(response.status === 201){
+        setStatus({ type: 'success', message: 'Unit added successfully!' });
+        setFormData({
+          comp: "0001",
+          code: "5",
+          name: "",
+          fadd: "Sample Address",
+          phno: "",
+          emal: "",
+          url: "",
+          tano: "",
+          pano: "",
+          blno: "",
+          dfaD1: "",
+          dfaD2: "",
+          dfaD3: "",
+          extrA1: "Extra1",
+          extrA2: "Extra2",
+          extrA3: "Extra3",
+          extrA4: "Extra4",
+          extrA5: "Extra5",
+          logo: "0x48656C6C6F2C20576F726C6421",
+          logoBase64: null,
+          insdet: "Sample Instruction",
+          invhead: "Sample Invoice Header",
+          noti: "Sample Notification",
+          active: "Y",
+          pkgver: "FAS",
+          cinno: "",
+          ofaD1: "",
+          ofaD2: "",
+          ofaD3: "",
+          isexportunit: "S",
+          sign: "0x48656C6C6F2C20576F726C6421",
+          citycod: "",
+          dpF_ADD: 0,
+          adD_ACOM: "Additional Comment",
+          adD_SUP: "Support Information",
+          adD_DCOM: "Description Comment",
+          rmK1: "Remark 1",
+          rmK2: "Remark 2",
+          rmK3: "Remark 3",
+          shortname: "",
+          gstn: "",
+          statecode: "",
+          statecod: "",
+          pinno: "",
+          citycode: "",
+          bankdeT1: "",
+          bankdeT2: "",
+          bankdeT3: "",
+          bankdeT4: "",
+          regdate: "",
+          msmeno: "",
+          msmestat: "",
+          legname: "",
+          compara: ""
+        });
+        await sleep(1000);
+        setStatus(null);
+        setEditStatus(null);
+        setValidationError(null);
+      }
     } catch (error) {
-      setStatus({ type: 'error', message: 'Failed to add unit.' });
+      if (error.response && error.response.status === 400) {
+        if (error.response.data === "Unit Name already in use.") {
+          setValidationError('Unit Name already in use.');
+        } else {
+          setValidationError('An error occurred. Please try again.');
+        }
+      } else {
+        setValidationError('An error occurred. Please try again.');
+      }
     }
   };
 
@@ -335,31 +521,104 @@ const UnitMasterForm = () => {
   };
 
   const handleEditClick = (unit) => {
+    const newEditingRows = { ...editingRows, [unit.code]: unit };
+    setEditingRows(newEditingRows);
+  
     const editTabExists = tabs.some(tab => tab.label === `Edit ${unit.name}`);
     if (!editTabExists) {
       setTabs([...tabs, { label: `Edit ${unit.name}`, code: unit.code }]);
     }
     const editTabIndex = tabs.findIndex(tab => tab.label === `Edit ${unit.name}`);
     setTabValue(editTabIndex >= 0 ? editTabIndex : tabs.length);
-
-    setEditingRows({
-      ...editingRows,
-      [unit.code]: unit,
-    });
   };
+  
 
   const handleUpdateClick = async (rowCode) => {
+    const editedunit ={
+      COMP: '0001',
+      CODE: rowCode,
+      NAME: editingRows[rowCode].name,
+      FADD: "Sample Address",
+      PHNO: editingRows[rowCode].phno,
+      EMAL: editingRows[rowCode].emal,
+      URL: editingRows[rowCode].url,
+      TANO: editingRows[rowCode].tano,
+      PANO: editingRows[rowCode].pano,
+      BLNO: editingRows[rowCode].blno,
+      DFAD1: editingRows[rowCode].dfaD1,
+      DFAD2: editingRows[rowCode].dfaD2,
+      DFAD3: editingRows[rowCode].dfaD3,
+      EXTRA1: "Extra1",
+      EXTRA2: "Extra2",
+      EXTRA3: "Extra3",
+      EXTRA4: "Extra4",
+      EXTRA5: "Extra5",
+      LOGO: "0x48656C6C6F2C20576F726C6421",
+      LOGOBASE64: null,
+      INSDET: "Sample Instruction",
+      INVHEAD: "Sample Invoice Header",
+      NOTI: "Sample Notification",
+      ACTIVE: "Y",
+      PKGVER: "FAS",
+      CINNO: editingRows[rowCode].cinno,
+      OFAD1: editingRows[rowCode].ofaD1,
+      OFAD2: editingRows[rowCode].ofaD2,
+      OFAD3: editingRows[rowCode].ofaD3,
+      ISEXPORTUNIT: "S",
+      SIGN: "0x48656C6C6F2C20576F726C6421",
+      CITYCOD: editingRows[rowCode].citycod,
+      DPF_ADD: 0,
+      ADD_ACOM: "Additional Comment",
+      ADD_SUP: "Support Information",
+      ADD_DCOM: "Description Comment",
+      RMK1: "Remark 1",
+      RMK2: "Remark 2",
+      RMK3: "Remark 3",
+      SHORTNAME: editingRows[rowCode].shortname,
+      GSTN: editingRows[rowCode].gstn,
+      STATECODE: editingRows[rowCode].statecode,
+      STATECOD: editingRows[rowCode].statecod,
+      PINNO: editingRows[rowCode].pinno,
+      CITYCODE: editingRows[rowCode].citycode,
+      BANKDET1: editingRows[rowCode].bankdeT1,
+      BANKDET2: editingRows[rowCode].bankdeT2,
+      BANKDET3: editingRows[rowCode].bankdeT3,
+      BANKDET4: editingRows[rowCode].bankdeT4,
+      REGDATE: editingRows[rowCode].regdate,
+      MSMENO: editingRows[rowCode].msmeno,
+      MSMESTAT: editingRows[rowCode].msmestat,
+      LEGNAME: editingRows[rowCode].legname,
+      COMPARA: editingRows[rowCode].compara,
+
+    }
     try {
-      await axios.put(`${UNITMASTER_URL_ENDPOINT}/${editingRows[rowCode].comp}/${editingRows[rowCode].code}`, editingRows[rowCode]);
-      await fetchUnits();
-      handleTabClose(rowCode);
+      const response = await axios.put(`${UNITMASTER_URL_ENDPOINT}/${editingRows[rowCode].comp}/${editingRows[rowCode].code}`, editedunit, {
+        headers: {
+          'Authorization': 'Basic ' + btoa('11190802:60-dayfreetrial'),
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.status === 204) {
+        await fetchUnits();
+        handleTabClose(rowCode);
+        setValidationError(null);
+      }
     } catch (error) {
-      console.error("Error updating unit", error);
+      if (error.response && error.response.status === 400) {
+        if (error.response.data === "Unit Name already in existing record.") {
+          setEditStatus({ type: 'error', message: 'Unit Name already in existing record.' });
+        } else {
+          setValidationError('An error occurred. Please try again.');
+        }
+      } else {
+        setValidationError('An error occurred. Please try again.');
+      }
     }
   };
 
   const handleCancelUpdateClick = (rowCode) => {
     handleTabClose(rowCode);
+    setEditStatus(null);
   };
 
   const handleTabClose = (rowCode) => {
@@ -373,7 +632,7 @@ const UnitMasterForm = () => {
   };
 
   const handleCancel = () => {
-    setCreateFormData({
+    setFormData({
       comp: "0001",
       code: "5",
       name: "",
@@ -429,82 +688,22 @@ const UnitMasterForm = () => {
       legname: "",
       compara: ""
     });
+    setStatus(null);
+    setEditStatus(null);
     setValidationError(null);
   };
 
   const handleEdit = () => {
-    const editTabExists = tabs.some(tab => tab.label === 'Edit Units');
-    if (!editTabExists) {
-      const newTabLabel = `Edit Units`;
-      setTabs([...tabs, { label: newTabLabel }]);
+    const listTabExists = tabs.some(tab => tab.label === 'Unit Master List');
+    if (!listTabExists) {
+      setTabs([...tabs, { label: 'Unit Master List' }]);
     }
-    const editTabIndex = tabs.findIndex(tab => tab.label === 'Edit Units');
-    setTabValue(editTabIndex >= 0 ? editTabIndex : tabs.length);
+    const listTabIndex = tabs.findIndex(tab => tab.label === 'Unit Master List');
+    setTabValue(listTabIndex >= 0 ? listTabIndex : tabs.length);
   };
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
-    if (newValue === 0) {
-      setEditingRows(null);
-      setCreateFormData({
-        comp: "0001",
-        code: "5",
-        name: "",
-        fadd: "Sample Address",
-        phno: "",
-        emal: "",
-        url: "",
-        tano: "",
-        pano: "",
-        blno: "",
-        dfaD1: "",
-        dfaD2: "",
-        dfaD3: "",
-        extrA1: "Extra1",
-        extrA2: "Extra2",
-        extrA3: "Extra3",
-        extrA4: "Extra4",
-        extrA5: "Extra5",
-        logo: "0x48656C6C6F2C20576F726C6421",
-        logoBase64: null,
-        insdet: "Sample Instruction",
-        invhead: "Sample Invoice Header",
-        noti: "Sample Notification",
-        active: "Y",
-        pkgver: "FAS",
-        cinno: "",
-        ofaD1: "",
-        ofaD2: "",
-        ofaD3: "",
-        isexportunit: "S",
-        sign: "0x48656C6C6F2C20576F726C6421",
-        citycod: "",
-        dpF_ADD: 0,
-        adD_ACOM: "Additional Comment",
-        adD_SUP: "Support Information",
-        adD_DCOM: "Description Comment",
-        rmK1: "Remark 1",
-        rmK2: "Remark 2",
-        rmK3: "Remark 3",
-        shortname: "",
-        gstn: "",
-        statecode: "",
-        statecod: "",
-        pinno: "",
-        citycode: "",
-        bankdeT1: "",
-        bankdeT2: "",
-        bankdeT3: "",
-        bankdeT4: "",
-        regdate: "",
-        msmeno: "",
-        msmestat: "",
-        legname: "",
-        compara: ""
-      });
-      setStatus(null);
-      setValidationError(null);
-    }
   };
 
   return (
@@ -519,9 +718,7 @@ const UnitMasterForm = () => {
         {tabValue === 0 && (
           <form onSubmit={handleSubmit}>
             <Paper style={{ padding: 16, marginBottom: 20 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Unit Details
-              </Typography>
+              <Typography variant="subtitle1" gutterBottom>Unit Details</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
                   <FormControlLabel
@@ -537,29 +734,29 @@ const UnitMasterForm = () => {
                   />
                 </Grid>
                 <Grid item xs={12} sm={12}>
-                  <TextField fullWidth label="Unit Name" name="name" value={createFormData.name || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Unit Name" name="name" value={formData.name || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 1" name="ofaD1" value={createFormData.ofaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 1" name="ofaD1" value={formData.ofaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 2" name="ofaD2" value={createFormData.ofaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 2" name="ofaD2" value={formData.ofaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 3" name="ofaD3" value={createFormData.ofaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 3" name="ofaD3" value={formData.ofaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 1" name="dfaD1" value={createFormData.dfaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 1" name="dfaD1" value={formData.dfaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 2" name="dfaD2" value={createFormData.dfaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 2" name="dfaD2" value={formData.dfaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 3" name="dfaD3" value={createFormData.dfaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 3" name="dfaD3" value={formData.dfaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
@@ -569,7 +766,7 @@ const UnitMasterForm = () => {
                     <Select
                       label="Select State"
                       name="statecode"
-                      value={createFormData.statecode || ''}
+                      value={formData.statecode || ''}
                       onChange={handleChange}
                     >
                       {states.length > 0 ? (
@@ -590,8 +787,8 @@ const UnitMasterForm = () => {
                     <Select
                       label="Select City"
                       name="citycode"
-                      value={createFormData.citycode || ''}
-                      disabled={!createFormData.statecode}
+                      value={formData.citycode || ''}
+                      disabled={!formData.statecode}
                       onChange={handleChange}
                     >
                       {cityGroups.length > 0 ? (
@@ -607,18 +804,18 @@ const UnitMasterForm = () => {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="PIN" name="pinno" value={createFormData.pinno || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="PIN" name="pinno" value={formData.pinno || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Phone" name="phno" value={createFormData.phno || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Phone" name="phno" value={formData.phno || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Email" name="emal" value={createFormData.emal || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Email" name="emal" value={formData.emal || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="URL" name="url" value={createFormData.url || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="URL" name="url" value={formData.url || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
             </Paper>
@@ -631,14 +828,14 @@ const UnitMasterForm = () => {
                   fullWidth 
                   label="GST No" 
                   name="gstn" 
-                  value={createFormData.gstn || ''} 
+                  value={formData.gstn || ''} 
                   onChange={handleChange} 
                   variant="outlined" 
                   margin="dense" 
                   error={!!validationError} 
                   helperText={validationError || ''}
                 />                 
-                <TextField fullWidth label="PAN No" name="pano" value={createFormData.pano || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                <TextField fullWidth label="PAN No" name="pano" value={formData.pano || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
@@ -646,7 +843,7 @@ const UnitMasterForm = () => {
                     label="Registration Date"
                     name="regdate"
                     type="datetime-local"
-                    value={createFormData.regdate || ''}
+                    value={formData.regdate || ''}
                     onChange={handleChange}
                     variant="outlined"
                     margin="dense"
@@ -654,22 +851,22 @@ const UnitMasterForm = () => {
                       shrink: true,
                     }}
                   />
-                  <TextField fullWidth label="TAN No" name="tano" value={createFormData.tano || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="TAN No" name="tano" value={formData.tano || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="CIN No" name="cinno" value={createFormData.cinno || ''} onChange={handleChange} variant="outlined" margin="dense" />
-                  <TextField fullWidth label="MSME No" name="msmeno" value={createFormData.msmeno || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="CIN No" name="cinno" value={formData.cinno || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="MSME No" name="msmeno" value={formData.msmeno || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                <TextField fullWidth label="Short Name" name="shortname" value={createFormData.shortname || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                <TextField fullWidth label="Short Name" name="shortname" value={formData.shortname || ''} onChange={handleChange} variant="outlined" margin="dense" />
                   <FormControl fullWidth variant="outlined" margin="dense">
                     <InputLabel>MSME Status</InputLabel>
                     <Select
                       label="MSME Status"
                       name="msmestat"
-                      value={createFormData.msmestat || ''}
+                      value={formData.msmestat || ''}
                       onChange={handleChange}
                     >
                       <MenuItem value="N.A."><em>N.A.</em></MenuItem>
@@ -687,18 +884,18 @@ const UnitMasterForm = () => {
 
               <Grid container spacing={2}>
                   <Grid item xs={12} sm={4}>
-                    <TextField fullWidth label="Bank Name" name="bankdeT1" value={createFormData.bankdeT1} onChange={handleChange} variant="outlined" margin="dense"/>
+                    <TextField fullWidth label="Bank Name" name="bankdeT1" value={formData.bankdeT1} onChange={handleChange} variant="outlined" margin="dense"/>
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <TextField fullWidth label="Bank RTGS Code" name="bankdeT2" value={createFormData.bankdeT2} onChange={handleChange} variant="outlined" margin="dense" />
+                    <TextField fullWidth label="Bank RTGS Code" name="bankdeT2" value={formData.bankdeT2} onChange={handleChange} variant="outlined" margin="dense" />
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <TextField fullWidth label="Bank A/C No." name="bankdeT3" value={createFormData.bankdeT3} onChange={handleChange} variant="outlined" margin="dense"/>
+                    <TextField fullWidth label="Bank A/C No." name="bankdeT3" value={formData.bankdeT3} onChange={handleChange} variant="outlined" margin="dense"/>
                   </Grid>
                   </Grid>
                   <Grid container spacing={2}>
                   <Grid item xs={12} >
-                    <TextField fullWidth label="Bank Addresss" name="bankdeT4" value={createFormData.bankdeT4} onChange={handleChange} variant="outlined" margin="dense" multiline/>
+                    <TextField fullWidth label="Bank Addresss" name="bankdeT4" value={formData.bankdeT4} onChange={handleChange} variant="outlined" margin="dense" multiline/>
                   </Grid>
                 </Grid>
               
@@ -708,10 +905,10 @@ const UnitMasterForm = () => {
               <Typography variant="subtitle1" gutterBottom>Other Information</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Legal Name" name="legname" value={createFormData.legname || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Legal Name" name="legname" value={formData.legname || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Company Parameter" name="compara" value={createFormData.compara || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Company Parameter" name="compara" value={formData.compara || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               {status && (
@@ -760,10 +957,8 @@ const UnitMasterForm = () => {
 
         {tabValue === 1 && (
           <Paper style={{ padding: 16, marginBottom: 1 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              {tabs[tabValue].label}
-            </Typography>
-            <TableContainer component={Paper} sx={{ maxHeight: 400, overflowY: 'auto', borderRadius: '8px', boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)' }}>
+            <Typography variant="subtitle1" gutterBottom>Unit Master List</Typography>
+            <TableContainer component={Paper} sx={{ maxHeight: 4000, overflowY: 'auto', borderRadius: '8px', boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)' }}>
               <Table stickyHeader sx={{ minWidth: 650, width: '100%' }}>
                 <TableHead>
                   <TableRow>
@@ -815,34 +1010,32 @@ const UnitMasterForm = () => {
         {tabValue > 1 && editingRows[tabs[tabValue].code] && (
           <form>
             <Paper style={{ padding: 16, marginBottom: 20 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Unit Details
-              </Typography>
+              <Typography variant="subtitle1" gutterBottom>Edit Record</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={12}>
-                  <TextField fullWidth label="Unit Name" name="name" value={editingRows[tabs[tabValue].code].name || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Unit Name" name="name" value={editingRows[tabs[tabValue].code].name || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 1" name="ofaD1" value={editingRows[tabs[tabValue].code].ofaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 1" name="ofaD1" value={editingRows[tabs[tabValue].code].ofaD1 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 2" name="ofaD2" value={editingRows[tabs[tabValue].code].ofaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 2" name="ofaD2" value={editingRows[tabs[tabValue].code].ofaD2 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 3" name="ofaD3" value={editingRows[tabs[tabValue].code].ofaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 3" name="ofaD3" value={editingRows[tabs[tabValue].code].ofaD3 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 1" name="dfaD1" value={editingRows[tabs[tabValue].code].dfaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 1" name="dfaD1" value={editingRows[tabs[tabValue].code].dfaD1 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 2" name="dfaD2" value={editingRows[tabs[tabValue].code].dfaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 2" name="dfaD2" value={editingRows[tabs[tabValue].code].dfaD2 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 3" name="dfaD3" value={editingRows[tabs[tabValue].code].dfaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 3" name="dfaD3" value={editingRows[tabs[tabValue].code].dfaD3 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
@@ -853,7 +1046,7 @@ const UnitMasterForm = () => {
                       label="Select State"
                       name="statecode"
                       value={editingRows[tabs[tabValue].code].statecode || ''}
-                      onChange={handleChange}
+                      onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     >
                       {states.length > 0 ? (
                         states.map((state) => (
@@ -874,10 +1067,11 @@ const UnitMasterForm = () => {
                       label="Select City"
                       name="citycode"
                       value={editingRows[tabs[tabValue].code].citycode || ''}
-                      onChange={handleChange}
+                      disabled={!editingRows[tabs[tabValue].code].comP_STATECODE}
+                      onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     >
-                      {cityGroups.length > 0 ? (
-                        cityGroups.map((city) => (
+                      {cityGroupsedit.length > 0 ? (
+                        cityGroupsedit.map((city) => (
                           <MenuItem key={city.code} value={city.code}>
                             {city.name}
                           </MenuItem>
@@ -889,18 +1083,18 @@ const UnitMasterForm = () => {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="PIN" name="pinno" value={editingRows[tabs[tabValue].code].pinno || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="PIN" name="pinno" value={editingRows[tabs[tabValue].code].pinno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Phone" name="phno" value={editingRows[tabs[tabValue].code].phno || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Phone" name="phno" value={editingRows[tabs[tabValue].code].phno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Email" name="emal" value={editingRows[tabs[tabValue].code].emal || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Email" name="emal" value={editingRows[tabs[tabValue].code].emal || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="URL" name="url" value={editingRows[tabs[tabValue].code].url || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="URL" name="url" value={editingRows[tabs[tabValue].code].url || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
             </Paper>
@@ -909,8 +1103,8 @@ const UnitMasterForm = () => {
               <Typography variant="subtitle1" gutterBottom>Financial Information</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="GST No" name="gstn" value={editingRows[tabs[tabValue].code].gstn || ''} onChange={handleChange} variant="outlined" margin="dense" />
-                  <TextField fullWidth label="PAN No" name="pano" value={editingRows[tabs[tabValue].code].pano || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="GST No" name="gstn" value={editingRows[tabs[tabValue].code].gstn || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="PAN No" name="pano" value={editingRows[tabs[tabValue].code].pano || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
@@ -919,30 +1113,30 @@ const UnitMasterForm = () => {
                     name="regdate"
                     type="datetime-local"
                     value={editingRows[tabs[tabValue].code].regdate || ''}
-                    onChange={handleChange}
+                    onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     margin="dense"
                     InputLabelProps={{
                       shrink: true,
                     }}
                   />
-                  <TextField fullWidth label="TAN No" name="tano" value={editingRows[tabs[tabValue].code].tano || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="TAN No" name="tano" value={editingRows[tabs[tabValue].code].tano || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="CIN No" name="cinno" value={editingRows[tabs[tabValue].code].cinno || ''} onChange={handleChange} variant="outlined" margin="dense" />
-                  <TextField fullWidth label="MSME No" name="msmeno" value={editingRows[tabs[tabValue].code].msmeno || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="CIN No" name="cinno" value={editingRows[tabs[tabValue].code].cinno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="MSME No" name="msmeno" value={editingRows[tabs[tabValue].code].msmeno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                <TextField fullWidth label="Short Name" name="shortname" value={editingRows[tabs[tabValue].code].shortname || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                <TextField fullWidth label="Short Name" name="shortname" value={editingRows[tabs[tabValue].code].shortname || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                   <FormControl fullWidth variant="outlined" margin="dense">
                     <InputLabel>MSME Status</InputLabel>
                     <Select
                       label="MSME Status"
                       name="msmestat"
                       value={editingRows[tabs[tabValue].code].msmestat || ''}
-                      onChange={handleChange}
+                      onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     >
                       <MenuItem value="N.A."><em>N.A.</em></MenuItem>
                       <MenuItem value="Micro">Micro</MenuItem>
@@ -959,18 +1153,18 @@ const UnitMasterForm = () => {
 
               <Grid container spacing={2}>
                   <Grid item xs={12} sm={4}>
-                    <TextField fullWidth label="Bank Name" name="bankdeT1" value={editingRows[tabs[tabValue].code].bankdeT1 || ''} onChange={handleChange} variant="outlined" margin="dense"/>
+                    <TextField fullWidth label="Bank Name" name="bankdeT1" value={editingRows[tabs[tabValue].code].bankdeT1 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense"/>
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <TextField fullWidth label="Bank RTGS Code" name="bankdeT2" value={editingRows[tabs[tabValue].code].bankdeT2 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                    <TextField fullWidth label="Bank RTGS Code" name="bankdeT2" value={editingRows[tabs[tabValue].code].bankdeT2 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <TextField fullWidth label="Bank A/C No." name="bankdeT3" value={editingRows[tabs[tabValue].code].bankdeT3 || ''}onChange={handleChange} variant="outlined" margin="dense"/>
+                    <TextField fullWidth label="Bank A/C No." name="bankdeT3" value={editingRows[tabs[tabValue].code].bankdeT3 || ''}onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense"/>
                   </Grid>
                   </Grid>
                   <Grid container spacing={2}>
                   <Grid item xs={12} >
-                    <TextField fullWidth label="Bank Addresss" name="bankdeT4" value={editingRows[tabs[tabValue].code].bankdeT4 || ''} onChange={handleChange} variant="outlined" margin="dense" multiline/>
+                    <TextField fullWidth label="Bank Addresss" name="bankdeT4" value={editingRows[tabs[tabValue].code].bankdeT4 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" multiline/>
                   </Grid>
                 </Grid>
             </Paper>
@@ -979,10 +1173,10 @@ const UnitMasterForm = () => {
               <Typography variant="subtitle1" gutterBottom>Other Information</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Legal Name" name="legname" value={editingRows[tabs[tabValue].code].legname || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Legal Name" name="legname" value={editingRows[tabs[tabValue].code].legname || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Company Parameter" name="compara" value={editingRows[tabs[tabValue].code].compara || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Company Parameter" name="compara" value={editingRows[tabs[tabValue].code].compara || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               {status && (
