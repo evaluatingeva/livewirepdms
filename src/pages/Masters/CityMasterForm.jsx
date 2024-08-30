@@ -396,6 +396,7 @@ const CityMasterForm = () => {
                               city.name,
                               setCityGroups,
                               cityGroups,
+                              'code',
                               setEditingRows)}
                           >
                             Delete
