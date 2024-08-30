@@ -95,14 +95,14 @@ const TaxGroupForm = () => {
       }
     } catch (error) {
       if (error.response && error.response.status === 400) {
-        if (error.response.data === "Tax Group name already in use.") {
-          setValidationError('Tax Group Code already in use.');
+        if (error.response.data === "A tax group with the same name already exists.") {
+            setValidationError('Tax Group name already in use.');
         } else {
-          setValidationError('An error occurred. Please try again.');
+            setValidationError('An error occurred. Please try again.');
         }
-      } else {
+    } else {
         setValidationError('An error occurred. Please try again.');
-      }
+    }
     }
   };
 
@@ -154,14 +154,14 @@ const TaxGroupForm = () => {
       }
     } catch (error) {
       if (error.response && error.response.status === 400) {
-        if (error.response.data === "Tax Group already in existing record.") {
-          setEditStatus({ type: 'error', message: 'Tax Group already in existing record.' });
+        if (error.response.data === "A tax group with the same name already exists.") {
+            setEditStatus({ type: 'error', message: 'Tax Group already in existing record.' });
         } else {
-          setValidationError('An error occurred. Please try again.');
+            setValidationError('An error occurred. Please try again.');
         }
-      } else {
+    } else {
         setValidationError('An error occurred. Please try again.');
-      }
+    }
     }
   };
 
@@ -311,6 +311,7 @@ const TaxGroupForm = () => {
                               group.name,
                               setTaxGroups,
                               taxGroups,
+                              'code',
                               setEditingRows)}
                           >
                             Delete
