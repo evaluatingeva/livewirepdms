@@ -371,6 +371,7 @@ const validationcheckfieldsedit = (rowCode) =>{
                               state.name,
                               setStateMasters,
                               stateMasters,
+                              'code',
                               setEditingRows)}
                           >
                             Delete
