@@ -10,3 +10,4 @@ export const CITYMASTER_URL_ENDPOINT = `${rootApiUrl}api/CITYMASTER`;
 export const STATEMASTER_URL_ENDPOINT = `${rootApiUrl}api/STATEMASTER`;
 export const COMPMAST_URL_ENDPOINT= `${rootApiUrl}api/COMPMAST`;
 export const UNITMASTER_URL_ENDPOINT =`${rootApiUrl}api/UNTMST`;
+export const SCHEDULEMASTER_URL_ENDPOINT =`${rootApiUrl}api/HEDMST`;
