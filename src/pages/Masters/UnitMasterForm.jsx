@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TextField, Grid, Typography, Paper, Box, Tabs, Tab, Table, TableBody, TableContainer, TableHead, TableRow, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox } from '@mui/material';
+import { FormHelperText,TextField, Grid, Typography, Paper, Box, Tabs, Tab, Table, TableBody, TableContainer, TableHead, TableRow, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox } from '@mui/material';
 import axios from 'axios';
 import { UNITMASTER_URL_ENDPOINT, COMPMAST_URL_ENDPOINT, STATEMASTER_URL_ENDPOINT, CITYMASTER_URL_ENDPOINT } from '../../utils/url_endpoints';
 import { CustomButton, StyledTableCell, StyledTableRow } from '../styledComponents';
@@ -18,6 +18,8 @@ function sleep(ms) {
 
 const UnitMasterForm = () => {
   const [formData, setFormData] = useState({
+    CC:"",
+    SC:"",
     comp: "0001",
     code: "5",
     name: "",
@@ -75,8 +77,10 @@ const UnitMasterForm = () => {
   });
 
   const [status, setStatus] = useState(null);
-  const [editstatus, setEditStatus] = useState(null);
+  const [editstatus, setEditStatus] = useState({});
   const [validationError, setValidationError] = useState(null);
+  const [validationErrorcheck, setValidationErrorcheck] = useState(null);
+  const [validationErrorcheckedit, setValidationErrorcheckedit] = useState(null);
   const [tabValue, setTabValue] = useState(0);
   const [tabs, setTabs] = useState([{ label: 'Unit Details' }]);
   const [units, setUnits] = useState([]);
@@ -85,42 +89,88 @@ const UnitMasterForm = () => {
   const [cityGroups, setCityGroups] = useState([]);
   const [cityGroupsedit, setCityGroupsedit] = useState([]);
   const [states, setStates] = useState([]);
-
-  const handleGstChange = (value) => {
-    let errorMessage = '';
-    const stateCodePattern = /^[0-9]{2}/;
-    const panPattern = /^[A-Z]{5}[0-9]{4}[A-Z]{1}/;
-    const suffixPattern = /^[1-9][A-Z]{2}$/;
+  const [ValidationErrorGST, setValidationErrorGST  ] = useState(null);
+  const [ValidationErrorGSTedit, setValidationErrorGSTedit  ] = useState(null);
   
-    // Check if the first two characters are digits (state code)
-    if (value.length >= 2 && !stateCodePattern.test(value.slice(0, 2))) {
-      errorMessage = 'GST number must start with two digits representing the state code.';
-    } else if (value.length >= 12 && !panPattern.test(value.slice(2, 12))) {
-      // Check if the next 10 characters form a valid PAN format
-      errorMessage = 'The GST number must contain a valid PAN in the middle (5 letters, 4 numbers, and 1 letter).';
-    } else if (value.length >= 15 && !suffixPattern.test(value.slice(12, 15))) {
-      // Check the last 3 characters of the GST number
-      errorMessage = 'The last three characters of the GST number should be alphanumeric, starting with a digit.';
-    }
-  
-    // Set the validation error message
-    setValidationError(errorMessage);
-  
-    // Extract PAN from GST if the input length is sufficient
-    const pan = value.length >= 12 ? value.substring(2, 12) : '';
-  
-    // Update the form state with the GST number and PAN
-    setFormData((prevData) => ({
-      ...prevData,
-      gstn: value,
-      pano: pan
-    }));
+  const refresherror = () => {
+    setValidationErrorcheck(null);
+    setValidationErrorcheckedit(null);
+    //setValidationErrorcheckedit(null);
   };
 
-  const fetchCityGroups = async () => {
+  const validationcheckfields = () =>{
+    let errors = {};
+    if (!formData.name) errors.name = 'Unit Name cannot be blank';
+    if (!formData.dfaD1 || !formData.dfaD2 ||!formData.dfaD3) errors.foa1 = 'Complete Factory adress Required fill all three textbox of factory address';
+    if (!formData.ofaD1 || !formData.ofaD2 ||!formData.ofaD3) errors.roa1 = 'Complete Registered adress Required fill all three textbox of registered address';
+    if (formData.pinno && !/^\d{6}$/.test(formData.pinno)) { errors.pinno = 'PIN Number must be exactly 6 digits';}
+    if (!formData.pano) errors.pano = 'PAN cannot be blank';
+    if (!formData.gstn) errors.gstn = 'GST Number cannot be blank';
+    if (formData.gstn && formData.gstn.length !== 15) errors.gstlength = 'GST Should be of 15 characters';
+    if (!formData.regdate) errors.regdate = 'Registration Date cannot be blank';
+    if (!formData.legname) errors.legname = 'Legal Name cannot be blank';
+    if (!formData.pinno) errors.pinno = 'PIN Number cannot be blank';
+    if (!formData.CC) errors.CC = 'City Code cannot be blank';
+    if (!formData.SC) errors.SC = 'State Code cannot be blank';
+    if (formData.cinno && formData.cinno.length !== 21) errors.cinlength = 'CIN Should be of 21 charcaters';
+    if (formData.tano && formData.tano.length !== 10) errors.tanlength = 'TAN Should be of 10 charcaters';
+    if (formData.msmeno && formData.msmeno.length !== 19) errors.msmelength = 'MSME Number Should be of 19 charcaters';
+    // Set the validation errors state
+    setValidationErrorcheck(errors);
+    // Return "error" if there are any validation errors
+    if (Object.keys(errors).length > 0) {
+      return "error";
+    }
+}
+
+const validationcheckfieldsedit = (rowCode) => {
+  let errors = {};
+  let row = { ...editingRows[rowCode] };  // Create a shallow copy of the row to avoid mutating the original object
+
+  // Trim all string values in the row
+  for (let key in row) {
+    if (typeof row[key] === 'string') {
+      row[key] = row[key].trim();
+    }
+  }
+
+  if (!row.name) errors.name = 'Unit Name cannot be blank';
+  if (!row.dfaD1 || !row.dfaD2 || !row.dfaD3) errors.foa1 = 'Complete Factory address required; fill all three textboxes of factory address';
+  if (!row.ofaD1 || !row.ofaD2 || !row.ofaD3) errors.roa1 = 'Complete Registered address required; fill all three textboxes of registered address';
+  if (row.pinno && !/^\d{6}$/.test(row.pinno)) errors.pinno = 'PIN Number must be exactly 6 digits';
+  if (!row.pinno) errors.pinno = 'PIN Number cannot be blank';
+  if (!row.pano) errors.pano = 'PAN cannot be blank';
+  if (!row.gstn) errors.gstn = 'GST Number cannot be blank';
+  if (row.gstn && row.gstn.length !== 15) errors.gstlength = 'GST Should be of 15 characters';
+  if (!row.regdate) errors.regdate = 'Registration Date cannot be blank';
+  if (!row.legname) errors.legname = 'Legal Name cannot be blank';
+  if (!row.citycode) errors.citycod = 'City Code cannot be blank';
+  if (!row.statecode) errors.statecode = 'State Code cannot be blank';
+  if (row.cinno && row.cinno.length !== 21) errors.cinlength = 'CIN Should be of 21 characters';
+  if (row.tano && row.tano.length !== 10) errors.tanlength = 'TAN Should be of 10 characters';
+  if (row.msmeno && row.msmeno.length !== 19) errors.msmelength = 'MSME Number should be of 19 characters';
+ 
+  if (Object.keys(errors).length > 0) {
+    console.log('Validation Errors:');
+    for (const [field, message] of Object.entries(errors)) {
+      console.log(`${field}: ${message}`);
+    }
+  }
+  setValidationErrorcheckedit((prevErrors) => ({
+    ...prevErrors,
+    [rowCode]: errors
+  }));
+
+  if (Object.keys(errors).length > 0) {
+    return "error";
+  }
+};
+
+
+  const fetchCityGroups = async (statecode) => {
     try {
       const response = await axios.get(CITYMASTER_URL_ENDPOINT);
-      const filteredCities = response.data.filter(city => city.statecode === formData.statecode);
+      const filteredCities = response.data.filter(city => city.statecode === statecode);
       setCityGroups(filteredCities);
     } catch (error) {
       console.error("Error fetching City records", error);
@@ -173,17 +223,26 @@ const UnitMasterForm = () => {
   const fetchUnits = async () => {
     try {
       const response = await axios.get(`${UNITMASTER_URL_ENDPOINT}`);
-      setUnits(response.data);
+      const trimmedData = response.data.map(comp => 
+        Object.fromEntries(
+          Object.entries(comp).map(([key, value]) => [
+            key,
+            typeof value === 'string' ? value.trim() : value,
+          ])
+        )
+      );
+      setUnits(trimmedData);
     } catch (error) {
       console.error("Error fetching units", error);
     }
   };
 
   const handleImportFromCompanyMaster = async () => {
+    refresherror();
     try {
-      const response = await axios.get(`${COMPMAST_URL_ENDPOINT}/0009`); // Ensure the ID is correct
+      const response = await axios.get(`${COMPMAST_URL_ENDPOINT}/0022`); // Ensure the ID is correct
       const companyData = response.data;
-
+      fetchCityGroups(companyData.comP_STATECODE);
       setFormData(prevFormData => ({
         ...prevFormData,
         ofaD1: companyData.comP_OAD1 || '',
@@ -197,8 +256,8 @@ const UnitMasterForm = () => {
         url: companyData.comP_URL || '',
         pano: companyData.comP_PANO || '',
         tano: companyData.comP_TANO || '',
-        statecode: companyData.comP_STATECODE || '',
-        citycode: companyData.comP_CITYCODE || '',
+        SC: companyData.comP_STATECODE || '',
+        CC: companyData.comP_CITYCODE || '',
         pinno: companyData.comP_PINCODE || '',
         gstn: companyData.comP_GST || '',
         msmeno: companyData.comP_MSMENO || '',
@@ -207,7 +266,8 @@ const UnitMasterForm = () => {
         bankdeT2: companyData.comP_BNKRTGS || '',
         bankdeT3: companyData.comP_BNKAC || '',
         bankdeT4: companyData.comP_BNKADD || '',
-        cinno: companyData.comP_CIN || ''
+        cinno: companyData.comP_CIN || '',
+        legname: companyData.comP_FNAM || '',
       }));
     } catch (error) {
       console.error("Error importing company data", error);
@@ -219,6 +279,8 @@ const UnitMasterForm = () => {
       handleImportFromCompanyMaster();
     } else {
       setFormData({
+        CC:"",
+        SC:"",
         comp: "0001",
         code: "5",
         name: "",
@@ -282,67 +344,139 @@ const UnitMasterForm = () => {
 
     if (name === 'importFromCompanyMaster') {
       setImportFromCompanyMaster(checked);
-    } else {
+    } 
+    
+    else {
         setFormData({ ...formData, 
           [name]: type === 'checkbox' ? checked : value, 
         });
     }
+    let updatedFormData = {
+      ...formData,
+      [name]: type === 'checkbox' ? checked : value,
+    };
+  
+    // GST-specific validation and update logic
     if (name === 'gstn') {
-      handleGstChange(value);
-    } else {
-      setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
+      let errorMessage = '';
+      const stateCodePattern = /^[0-9]{2}/;
+      const panPattern = /^[A-Z]{5}[0-9]{4}[A-Z]{1}/;
+      const suffixPattern = /^[1-9][A-Z]{2}$/;
+  
+      if (value.length >= 2 && !stateCodePattern.test(value.slice(0, 2))) {
+        errorMessage = 'GST number must start with two digits representing the state code.';
+      } else if (value.length >= 12 && !panPattern.test(value.slice(2, 12))) {
+        errorMessage = 'The GST number must contain a valid PAN in the middle (5 letters, 4 numbers, and 1 letter).';
+      } else if (value.length >= 15 && !suffixPattern.test(value.slice(12, 15))) {
+        errorMessage = 'The last three characters of the GST number should be alphanumeric, starting with a digit.';
+      }
+  
+      setValidationErrorGST(errorMessage);
+  
+      // Extract PAN from GST if the input length is sufficient
+      const pano = value.length >= 12 ? value.substring(2, 12) : '';
+      updatedFormData = {
+        ...updatedFormData,
+        gstn: value,
+        pano: pano,
+      };
     }
-    if (name === 'statecode') {
-      formData.statecode = value;
-      fetchCityGroups();
+  
+    // Handling Address concatenation for Factory Office
+    if (name === 'dfaD1' || name === 'dfaD2' || name === 'dfaD3') {
+      updatedFormData.fadd = [updatedFormData.dfaD1, updatedFormData.dfaD2, updatedFormData.dfaD3]
+        .filter(part => part && part.trim())
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
     }
+  
+    // Fetch cities if the state code changes
+    if (name === 'SC') {
+      fetchCityGroups(updatedFormData.SC);
+    }
+  
+    setFormData(updatedFormData);
+  
+    // Clear validation errors if any
     setStatus(null);
-    setEditStatus(null);
     setValidationError(null);
+    refresherror();
   };
 
   const handleEditFormChange = (event, rowCode) => {
     const { name, value } = event.target;
   
-    // Ensure all fields are preserved and only the specific field is updated
-    setEditingRows((prevEditingRows) => ({
-      ...prevEditingRows,
-      [rowCode]: {
-        ...prevEditingRows[rowCode],
-        [name]: value,
-      },
-    }));
+    // Create a copy of the existing editingRows and update the specific field
+    let updatedRow = { ...editingRows[rowCode], [name]: value };
   
     // Handle special case for GST number
     if (name === 'gstn') {
-      handleGstChange(value);
-    }
-    let updatedEditFormData = {
-      ...editingRows,
-      [rowCode]: {
-        ...editingRows[rowCode],
-        [name]: value,
-      },
-    };
-    // If state code is changed, fetch corresponding cities
-    if (name === 'statecode') {
-      updatedEditFormData[rowCode].statecode = value;
-      updatedEditFormData[rowCode].comP_STATECODE = value;
-      setEditingRows({
-        ...editingRows,
-        [rowCode]: updatedEditFormData[rowCode],
-      });
-      // Pass the state code directly to fetchCityGroups
-      fetchCityGroupsEdit(value);// Fetch cities based on the new state code
+      // GST-specific validation and PAN extraction
+      const stateCodePattern = /^[0-9]{2}/;
+      const panPattern = /^[A-Z]{5}[0-9]{4}[A-Z]{1}/;
+      const suffixPattern = /^[1-9][A-Z]{2}$/;
+  
+      let errorMessage = '';
+      if (value.length >= 2 && !stateCodePattern.test(value.slice(0, 2))) {
+        errorMessage = 'GST number must start with two digits representing the state code.';
+      } else if (value.length >= 12 && !panPattern.test(value.slice(2, 12))) {
+        errorMessage = 'The GST number must contain a valid PAN in the middle (5 letters, 4 numbers, and 1 letter).';
+      } else if (value.length >= 15 && !suffixPattern.test(value.slice(12, 15))) {
+        errorMessage = 'The last three characters of the GST number should be alphanumeric, starting with a digit.';
+      }
+  
+      setValidationErrorGSTedit(errorMessage);
+  
+      // Update the PAN based on GST number
+      const pan = value.length >= 12 ? value.substring(2, 12) : '';
+      updatedRow = { ...updatedRow, gstn: value, pano: pan };
     }
   
-    setEditStatus(null);
+    // Concatenate Factory Address fields
+    if (name === 'dfaD1' || name === 'dfaD2' || name === 'dfaD3') {
+      updatedRow.fadd = [updatedRow.dfaD1, updatedRow.dfaD2, updatedRow.dfaD3]
+        .filter(part => part && part.trim())
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+  
+    // Concatenate Registered Address fields
+    if (name === 'ofaD1' || name === 'ofaD2' || name === 'ofaD3') {
+      updatedRow.radd = [updatedRow.ofaD1, updatedRow.ofaD2, updatedRow.ofaD3]
+        .filter(part => part && part.trim())
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+  
+    // If state code changes, reset city code and fetch new cities
+    if (name === 'SC') {
+      updatedRow.statecode = value;
+      updatedRow.citycode = ''; // Reset city code when state changes
+      fetchCityGroupsEdit(value); // Fetch cities for the selected state
+    }
+  
+    // Update the editingRows state
+    setEditingRows(prevRows => ({
+      ...prevRows,
+      [rowCode]: updatedRow,
+    }));
+  
+    refresherror(); // Clear any existing errors
+    setEditStatus(prevStatuses => ({
+      ...prevStatuses,
+      [rowCode]: null, // or delete prevStatuses[rowCode] if you prefer removing the key entirely
+    })); // Clear edit status
   };
+  
   
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
+    if(validationcheckfields() === "error")
+      { return; }
     if (validationError) {
       setStatus({ type: 'error', message: 'Please fix the errors before submitting.' });
       return;
@@ -389,10 +523,10 @@ const UnitMasterForm = () => {
       RMK3: formData.rmK3,
       SHORTNAME: formData.shortname,
       GSTN: formData.gstn,
-      STATECODE: formData.statecode,
+      STATECODE: formData.SC,
       STATECOD: formData.statecod,
       PINNO: formData.pinno,
-      CITYCODE: formData.citycode,
+      CITYCODE: formData.CC,
       BANKDET1: formData.bankdeT1,
       BANKDET2: formData.bankdeT2,
       BANKDET3: formData.bankdeT3,
@@ -413,6 +547,8 @@ const UnitMasterForm = () => {
       if(response.status === 201){
         setStatus({ type: 'success', message: 'Unit added successfully!' });
         setFormData({
+          CC:"",
+           SC:"",
           comp: "0001",
           code: "5",
           name: "",
@@ -470,13 +606,12 @@ const UnitMasterForm = () => {
         });
         await sleep(1000);
         setStatus(null);
-        setEditStatus(null);
         setValidationError(null);
       }
     } catch (error) {
       if (error.response && error.response.status === 400) {
-        if (error.response.data === "Unit Name already in use.") {
-          setValidationError('Unit Name already in use.');
+        if (error.response.data === "A unit with the same name already exists within the same company.") {
+          setStatus({type: "error" ,message:'Unit Name already in use.'});
         } else {
           setValidationError('An error occurred. Please try again.');
         }
@@ -521,6 +656,8 @@ const UnitMasterForm = () => {
   };
 
   const handleEditClick = (unit) => {
+    refresherror();
+    setValidationError(null);
     const newEditingRows = { ...editingRows, [unit.code]: unit };
     setEditingRows(newEditingRows);
   
@@ -530,24 +667,29 @@ const UnitMasterForm = () => {
     }
     const editTabIndex = tabs.findIndex(tab => tab.label === `Edit ${unit.name}`);
     setTabValue(editTabIndex >= 0 ? editTabIndex : tabs.length);
+    
   };
   
 
   const handleUpdateClick = async (rowCode) => {
+
+
+    if(validationcheckfieldsedit(rowCode) === "error")
+      { return; }
     const editedunit ={
       COMP: '0001',
       CODE: rowCode,
-      NAME: editingRows[rowCode].name,
+      NAME: editingRows[rowCode].name.trim(),
       FADD: "Sample Address",
-      PHNO: editingRows[rowCode].phno,
-      EMAL: editingRows[rowCode].emal,
-      URL: editingRows[rowCode].url,
-      TANO: editingRows[rowCode].tano,
-      PANO: editingRows[rowCode].pano,
-      BLNO: editingRows[rowCode].blno,
-      DFAD1: editingRows[rowCode].dfaD1,
-      DFAD2: editingRows[rowCode].dfaD2,
-      DFAD3: editingRows[rowCode].dfaD3,
+      PHNO: editingRows[rowCode].phno.trim(),
+      EMAL: editingRows[rowCode].emal.trim(),
+      URL: editingRows[rowCode].url.trim(),
+      TANO: editingRows[rowCode].tano.trim(),
+      PANO: editingRows[rowCode].pano.trim(),
+      BLNO: editingRows[rowCode].blno.trim(),
+      DFAD1: editingRows[rowCode].dfaD1.trim(),
+      DFAD2: editingRows[rowCode].dfaD2.trim(),
+      DFAD3: editingRows[rowCode].dfaD3.trim(),
       EXTRA1: "Extra1",
       EXTRA2: "Extra2",
       EXTRA3: "Extra3",
@@ -560,13 +702,13 @@ const UnitMasterForm = () => {
       NOTI: "Sample Notification",
       ACTIVE: "Y",
       PKGVER: "FAS",
-      CINNO: editingRows[rowCode].cinno,
-      OFAD1: editingRows[rowCode].ofaD1,
-      OFAD2: editingRows[rowCode].ofaD2,
-      OFAD3: editingRows[rowCode].ofaD3,
+      CINNO: editingRows[rowCode].cinno.trim(),
+      OFAD1: editingRows[rowCode].ofaD1.trim(),
+      OFAD2: editingRows[rowCode].ofaD2.trim(),
+      OFAD3: editingRows[rowCode].ofaD3.trim(),
       ISEXPORTUNIT: "S",
       SIGN: "0x48656C6C6F2C20576F726C6421",
-      CITYCOD: editingRows[rowCode].citycod,
+      CITYCOD: editingRows[rowCode].citycod.trim(),
       DPF_ADD: 0,
       ADD_ACOM: "Additional Comment",
       ADD_SUP: "Support Information",
@@ -574,23 +716,25 @@ const UnitMasterForm = () => {
       RMK1: "Remark 1",
       RMK2: "Remark 2",
       RMK3: "Remark 3",
-      SHORTNAME: editingRows[rowCode].shortname,
-      GSTN: editingRows[rowCode].gstn,
-      STATECODE: editingRows[rowCode].statecode,
-      STATECOD: editingRows[rowCode].statecod,
-      PINNO: editingRows[rowCode].pinno,
-      CITYCODE: editingRows[rowCode].citycode,
-      BANKDET1: editingRows[rowCode].bankdeT1,
-      BANKDET2: editingRows[rowCode].bankdeT2,
-      BANKDET3: editingRows[rowCode].bankdeT3,
-      BANKDET4: editingRows[rowCode].bankdeT4,
-      REGDATE: editingRows[rowCode].regdate,
-      MSMENO: editingRows[rowCode].msmeno,
-      MSMESTAT: editingRows[rowCode].msmestat,
-      LEGNAME: editingRows[rowCode].legname,
-      COMPARA: editingRows[rowCode].compara,
+      SHORTNAME: editingRows[rowCode].shortname.trim(),
+      GSTN: editingRows[rowCode].gstn.trim(),
+      STATECODE: editingRows[rowCode].statecode.trim(),
+      STATECOD: editingRows[rowCode].statecod.trim(),
+      PINNO: editingRows[rowCode].pinno.trim(),
+      CITYCODE: editingRows[rowCode].citycode.trim(),
+      BANKDET1: editingRows[rowCode].bankdeT1.trim(),
+      BANKDET2: editingRows[rowCode].bankdeT2.trim(),
+      BANKDET3: editingRows[rowCode].bankdeT3.trim(),
+      BANKDET4: editingRows[rowCode].bankdeT4.trim(),
+      REGDATE: editingRows[rowCode].regdate.trim(),
+      MSMENO: editingRows[rowCode].msmeno.trim(),
+      MSMESTAT: editingRows[rowCode].msmestat.trim(),
+      LEGNAME: editingRows[rowCode].legname.trim(),
+      COMPARA: editingRows[rowCode].compara.trim(),
 
     }
+
+    
     try {
       const response = await axios.put(`${UNITMASTER_URL_ENDPOINT}/${editingRows[rowCode].comp}/${editingRows[rowCode].code}`, editedunit, {
         headers: {
@@ -604,9 +748,12 @@ const UnitMasterForm = () => {
         setValidationError(null);
       }
     } catch (error) {
-      if (error.response && error.response.status === 400) {
-        if (error.response.data === "Unit Name already in existing record.") {
-          setEditStatus({ type: 'error', message: 'Unit Name already in existing record.' });
+      if (error.response && error.response.status === 400) { 
+        if (error.response.data === "A unit with the same name already exists in Record.") {       
+          setEditStatus((prevStatuses) => ({
+            ...prevStatuses,
+            [rowCode]: { type: 'error', message: 'Unit Name already in existing record.' }
+          }));
         } else {
           setValidationError('An error occurred. Please try again.');
         }
@@ -618,7 +765,12 @@ const UnitMasterForm = () => {
 
   const handleCancelUpdateClick = (rowCode) => {
     handleTabClose(rowCode);
-    setEditStatus(null);
+    
+    setEditStatus(prevStatuses => ({
+      ...prevStatuses,
+      [rowCode]: null, // or delete prevStatuses[rowCode] if you prefer removing the key entirely
+    }));
+    //refresherror();
   };
 
   const handleTabClose = (rowCode) => {
@@ -629,10 +781,13 @@ const UnitMasterForm = () => {
       return remainingRows;
     });
     setTabValue(1);
+    //refresherror();
   };
 
   const handleCancel = () => {
     setFormData({
+      CC:"",
+    SC:"",
       comp: "0001",
       code: "5",
       name: "",
@@ -688,9 +843,10 @@ const UnitMasterForm = () => {
       legname: "",
       compara: ""
     });
+    setImportFromCompanyMaster(false);
     setStatus(null);
-    setEditStatus(null);
     setValidationError(null);
+    refresherror();
   };
 
   const handleEdit = () => {
@@ -704,6 +860,7 @@ const UnitMasterForm = () => {
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+    
   };
 
   return (
@@ -734,39 +891,41 @@ const UnitMasterForm = () => {
                   />
                 </Grid>
                 <Grid item xs={12} sm={12}>
-                  <TextField fullWidth label="Unit Name" name="name" value={formData.name || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Unit Name" name="name" value={formData.name || ''} onChange={handleChange} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheck?.name} helperText={validationErrorcheck?.name}/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 1" name="ofaD1" value={formData.ofaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 1" name="ofaD1" value={formData.ofaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" error={!!validationErrorcheck?.roa1} helperText={validationErrorcheck?.roa1}/>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 2" name="ofaD2" value={formData.ofaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 2" name="ofaD2" value={formData.ofaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" error={!!validationErrorcheck?.roa1}/>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 3" name="ofaD3" value={formData.ofaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 3" name="ofaD3" value={formData.ofaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" error={!!validationErrorcheck?.roa1}/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 1" name="dfaD1" value={formData.dfaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 1" name="dfaD1" value={formData.dfaD1 || ''} onChange={handleChange} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheck?.foa1} helperText={validationErrorcheck?.foa1}/>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 2" name="dfaD2" value={formData.dfaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 2" name="dfaD2" value={formData.dfaD2 || ''} onChange={handleChange} variant="outlined" margin="dense" error={!!validationErrorcheck?.foa1}/>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 3" name="dfaD3" value={formData.dfaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 3" name="dfaD3" value={formData.dfaD3 || ''} onChange={handleChange} variant="outlined" margin="dense" error={!!validationErrorcheck?.foa1}/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4} marginTop={1}> 
-                  <FormControl fullWidth variant="outlined">
+                  <FormControl fullWidth variant="outlined" error={!!validationErrorcheck?.SC}>
                     <InputLabel>Select State</InputLabel>
                     <Select
                       label="Select State"
-                      name="statecode"
-                      value={formData.statecode || ''}
+                      name="SC"
+                      value={formData.SC || ''}
                       onChange={handleChange}
                     >
                       {states.length > 0 ? (
@@ -779,16 +938,19 @@ const UnitMasterForm = () => {
                         <MenuItem disabled>No states available</MenuItem>
                       )}
                     </Select>
+                    {validationErrorcheck?.SC && (
+                  <FormHelperText>{validationErrorcheck?.SC}</FormHelperText>
+                )}
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={4} marginTop={1}>
-                  <FormControl fullWidth variant="outlined">
+                  <FormControl fullWidth variant="outlined" error={!!validationErrorcheck?.CC}>
                     <InputLabel>Select City</InputLabel>
                     <Select
                       label="Select City"
-                      name="citycode"
-                      value={formData.citycode || ''}
-                      disabled={!formData.statecode}
+                      name="CC"
+                      value={formData.CC || ''}
+                      disabled={!formData.SC}
                       onChange={handleChange}
                     >
                       {cityGroups.length > 0 ? (
@@ -801,10 +963,14 @@ const UnitMasterForm = () => {
                         <MenuItem disabled>No city available</MenuItem>
                       )}
                     </Select>
+                    {validationErrorcheck?.CC && (
+                  <FormHelperText>{validationErrorcheck?.CC}</FormHelperText>
+                )}
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="PIN" name="pinno" value={formData.pinno || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="PIN" name="pinno" value={formData.pinno || ''} onChange={handleChange} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheck?.pinno} helperText={validationErrorcheck?.pinno}/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
@@ -832,10 +998,10 @@ const UnitMasterForm = () => {
                   onChange={handleChange} 
                   variant="outlined" 
                   margin="dense" 
-                  error={!!validationError} 
-                  helperText={validationError || ''}
+                  error={!!ValidationErrorGST || !!validationErrorcheck?.gstn || !!validationErrorcheck?.gstlength } 
+                  helperText={ValidationErrorGST || '' || validationErrorcheck?.gstn || validationErrorcheck?.gstlength}
                 />                 
-                <TextField fullWidth label="PAN No" name="pano" value={formData.pano || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                <TextField fullWidth label="PAN No" name="pano" value={formData.pano || ''} onChange={handleChange} variant="outlined" margin="dense"  error={!!validationErrorcheck?.pano} helperText={validationErrorcheck?.pano}/>
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
@@ -847,17 +1013,21 @@ const UnitMasterForm = () => {
                     onChange={handleChange}
                     variant="outlined"
                     margin="dense"
+                    error={!!validationErrorcheck?.regdate} helperText={validationErrorcheck?.regdate}
                     InputLabelProps={{
                       shrink: true,
                     }}
                   />
-                  <TextField fullWidth label="TAN No" name="tano" value={formData.tano || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="TAN No" name="tano" value={formData.tano || ''} onChange={handleChange} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheck?.tanlength} helperText={validationErrorcheck?.tanlength}/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="CIN No" name="cinno" value={formData.cinno || ''} onChange={handleChange} variant="outlined" margin="dense" />
-                  <TextField fullWidth label="MSME No" name="msmeno" value={formData.msmeno || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="CIN No" name="cinno" value={formData.cinno || ''} onChange={handleChange} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheck?.cinlength} helperText={validationErrorcheck?.cinlength}/>
+                  <TextField fullWidth label="MSME No" name="msmeno" value={formData.msmeno || ''} onChange={handleChange} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheck?.msmelength} helperText={validationErrorcheck?.msmelength}/>
                 </Grid>
                 <Grid item xs={12} sm={6}>
                 <TextField fullWidth label="Short Name" name="shortname" value={formData.shortname || ''} onChange={handleChange} variant="outlined" margin="dense" />
@@ -905,14 +1075,14 @@ const UnitMasterForm = () => {
               <Typography variant="subtitle1" gutterBottom>Other Information</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Legal Name" name="legname" value={formData.legname || ''} onChange={handleChange} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Legal Name" name="legname" value={formData.legname || ''} onChange={handleChange} variant="outlined" margin="dense"  error={!!validationErrorcheck?.legname} helperText={validationErrorcheck?.legname}/>
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField fullWidth label="Company Parameter" name="compara" value={formData.compara || ''} onChange={handleChange} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
               {status && (
-                <Typography variant="body2" color={status.type === 'success' ? 'green' : 'red'} style={{ marginTop: 10 }}>
+                <Typography variant="body2" color={status.type === 'success' ? 'green' : 'yellow'} style={{ marginTop: 10 }}>
                   {status.message}
                 </Typography>
               )}
@@ -1013,38 +1183,41 @@ const UnitMasterForm = () => {
               <Typography variant="subtitle1" gutterBottom>Edit Record</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={12}>
-                  <TextField fullWidth label="Unit Name" name="name" value={editingRows[tabs[tabValue].code].name || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Unit Name" name="name" value={editingRows[tabs[tabValue].code].name || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense"
+                   error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.name } helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.name }/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 1" name="ofaD1" value={editingRows[tabs[tabValue].code].ofaD1 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 1" name="ofaD1" value={editingRows[tabs[tabValue].code].ofaD1 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense"
+                   error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.roa1} helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.roa1} />
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 2" name="ofaD2" value={editingRows[tabs[tabValue].code].ofaD2 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 2" name="ofaD2" value={editingRows[tabs[tabValue].code].ofaD2 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.roa1}/>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Registered Office Address 3" name="ofaD3" value={editingRows[tabs[tabValue].code].ofaD3 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Registered Office Address 3" name="ofaD3" value={editingRows[tabs[tabValue].code].ofaD3 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense"  error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.roa1}/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 1" name="dfaD1" value={editingRows[tabs[tabValue].code].dfaD1 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 1" name="dfaD1" value={editingRows[tabs[tabValue].code].dfaD1 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.foa1} helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.foa1}/>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 2" name="dfaD2" value={editingRows[tabs[tabValue].code].dfaD2 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 2" name="dfaD2" value={editingRows[tabs[tabValue].code].dfaD2 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.foa1}/>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="Factory Address 3" name="dfaD3" value={editingRows[tabs[tabValue].code].dfaD3 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="Factory Address 3" name="dfaD3" value={editingRows[tabs[tabValue].code].dfaD3 || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.foa1}/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4} marginTop={1}>
-                  <FormControl fullWidth variant="outlined">
+                  <FormControl fullWidth variant="outlined" error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.statecode}>
                     <InputLabel>Select State</InputLabel>
                     <Select
                       label="Select State"
-                      name="statecode"
+                      name="SC"
                       value={editingRows[tabs[tabValue].code].statecode || ''}
                       onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     >
@@ -1058,6 +1231,9 @@ const UnitMasterForm = () => {
                         <MenuItem disabled>No states available</MenuItem>
                       )}
                     </Select>
+                    {validationErrorcheckedit?.[tabs[tabValue]?.code]?.statecod && (
+                  <FormHelperText>{validationErrorcheckedit?.[tabs[tabValue]?.code]?.statecod}</FormHelperText>
+                )}
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={4} marginTop={1}>
@@ -1067,7 +1243,7 @@ const UnitMasterForm = () => {
                       label="Select City"
                       name="citycode"
                       value={editingRows[tabs[tabValue].code].citycode || ''}
-                      disabled={!editingRows[tabs[tabValue].code].comP_STATECODE}
+                      disabled={!editingRows[tabs[tabValue].code].SC}
                       onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     >
                       {cityGroupsedit.length > 0 ? (
@@ -1083,7 +1259,8 @@ const UnitMasterForm = () => {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth label="PIN" name="pinno" value={editingRows[tabs[tabValue].code].pinno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="PIN" name="pinno" value={editingRows[tabs[tabValue].code].pinno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.pinno} helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.pinno}/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
@@ -1103,8 +1280,11 @@ const UnitMasterForm = () => {
               <Typography variant="subtitle1" gutterBottom>Financial Information</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="GST No" name="gstn" value={editingRows[tabs[tabValue].code].gstn || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
-                  <TextField fullWidth label="PAN No" name="pano" value={editingRows[tabs[tabValue].code].pano || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="GST No" name="gstn" value={editingRows[tabs[tabValue].code].gstn || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" 
+                    error={!!ValidationErrorGSTedit || !!validationErrorcheckedit?.[tabs[tabValue]?.code]?.gstn|| !!validationErrorcheckedit?.[tabs[tabValue]?.code]?.gstlength} 
+                    helperText={ValidationErrorGSTedit || '' || validationErrorcheckedit?.[tabs[tabValue]?.code]?.gstn || validationErrorcheckedit?.[tabs[tabValue]?.code]?.gstlength}/>
+                  <TextField fullWidth label="PAN No" name="pano" value={editingRows[tabs[tabValue].code].pano || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" 
+                    error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.pano} helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.pano}/>
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
@@ -1116,17 +1296,21 @@ const UnitMasterForm = () => {
                     onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                     variant="outlined"
                     margin="dense"
+                    error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.regdate} helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.regdate}
                     InputLabelProps={{
                       shrink: true,
                     }}
                   />
-                  <TextField fullWidth label="TAN No" name="tano" value={editingRows[tabs[tabValue].code].tano || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="TAN No" name="tano" value={editingRows[tabs[tabValue].code].tano || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.tanlength} helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.tanlength}/>
                 </Grid>
               </Grid>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="CIN No" name="cinno" value={editingRows[tabs[tabValue].code].cinno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
-                  <TextField fullWidth label="MSME No" name="msmeno" value={editingRows[tabs[tabValue].code].msmeno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
+                  <TextField fullWidth label="CIN No" name="cinno" value={editingRows[tabs[tabValue].code].cinno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.cinlength} helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.cinlength}/>
+                  <TextField fullWidth label="MSME No" name="msmeno" value={editingRows[tabs[tabValue].code].msmeno || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" 
+                  error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.msmelength} helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.msmelength}/>
                 </Grid>
                 <Grid item xs={12} sm={6}>
                 <TextField fullWidth label="Short Name" name="shortname" value={editingRows[tabs[tabValue].code].shortname || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
@@ -1179,11 +1363,17 @@ const UnitMasterForm = () => {
                   <TextField fullWidth label="Company Parameter" name="compara" value={editingRows[tabs[tabValue].code].compara || ''} onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)} variant="outlined" margin="dense" />
                 </Grid>
               </Grid>
-              {status && (
-                <Typography variant="body2" color={status.type === 'success' ? 'green' : 'red'} style={{ marginTop: 10 }}>
-                  {status.message}
-                </Typography>
-              )}
+              
+              {editstatus[tabs[tabValue]?.code] && (
+                  <Typography 
+                    variant="body2" 
+                    color={editstatus[tabs[tabValue]?.code].type === 'success' ? 'green' : 'yellow'} 
+                    style={{ marginTop: 10 }}
+                  >
+                    {editstatus[tabs[tabValue]?.code].message}
+                  </Typography>
+                )}
+
             </Paper>
             <Box sx={{ display: 'flex', justifyContent: 'left' }}>
               <Grid container spacing={2} justifyContent="left">
