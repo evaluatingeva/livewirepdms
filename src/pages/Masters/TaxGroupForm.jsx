@@ -19,14 +19,32 @@ const TaxGroupForm = () => {
   });
 
   const [status, setStatus] = useState(null);
-  const [editstatus, setEditStatus] = useState(null);
+  const [editstatus, setEditStatus] = useState({});
+  const [validationErrorcheck, setValidationErrorcheck] = useState(null);
+  const [validationErrorcheckedit, setValidationErrorcheckedit] = useState(null);
   const [validationError, setValidationError] = useState(null);
-  const [validationErroredit, setValidationErroredit] = useState(null);
   const [tabValue, setTabValue] = useState(0);
   const [tabs, setTabs] = useState([{ label: 'Tax Group Details' }]);
   const [taxGroups, setTaxGroups] = useState([]);
   const [editingRows, setEditingRows] = useState({});
+  
+  const refresherror = () => {
+    setValidationErrorcheck(null);
+    setValidationErrorcheckedit(null);
+  };
 
+  const validationcheckfields = () =>{
+    let errors = {};
+    if (!formData.taxgroupname) errors.name = 'Tax Name cannot be blank';
+    if (formData.taxgroupname && formData.taxgroupname.length > 20) errors.length = 'Tax Name cannot be greater than 20';
+
+    // Set the validation errors state
+    setValidationErrorcheck(errors);
+    // Return "error" if there are any validation errors
+    if (Object.keys(errors).length > 0) {
+      return "error";
+    }
+}
   useEffect(() => {
     if (tabValue === 1) fetchTaxGroups();
   }, [tabValue]);
@@ -41,6 +59,31 @@ const TaxGroupForm = () => {
     }
   };
 
+  const validationcheckfieldsedit = (rowCode) => {
+    let errors = {};
+    let row = { ...editingRows[rowCode] };  // Create a shallow copy of the row to avoid mutating the original object
+  
+    // Trim all string values in the row
+    for (let key in row) {
+      if (typeof row[key] === 'string') {
+        row[key] = row[key].trim();
+      }
+    }
+  
+    if (!row.taxgroupname) errors.name = 'Tax Name cannot be blank';
+    if (!row.taxgroupname && row.taxgroupname.length > 20) errors.length = 'Tax Name cannot be greater than 20';
+
+  
+    setValidationErrorcheckedit((prevErrors) => ({
+      ...prevErrors,
+      [rowCode]: errors
+    }));
+  
+    if (Object.keys(errors).length > 0) {
+      return "error";
+    }
+  };
+
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
     setFormData({
@@ -48,7 +91,7 @@ const TaxGroupForm = () => {
       [name]: type === 'checkbox' ? checked : value,
     });
     setStatus(null);
-    setEditStatus(null);
+    refresherror();
     setValidationError(null);
   };
 
@@ -58,21 +101,16 @@ const TaxGroupForm = () => {
       ...editingRows,
       [rowCode]: { ...editingRows[rowCode], [name]: type === 'checkbox' ? checked : value },
     });
-    setEditStatus(null);
+   
+    
+    refresherror();
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
-    if (!formData.taxgroupname) {
-      setValidationError('Tax Group Name is required');
-      return;
-    }
-
-    if (formData.taxgroupname.trim().length > 20) {
-      setValidationError('Tax Group Name cannot exceed 20 characters');
-      return;
-    }
+    if(validationcheckfields() === "error")
+      { return; }
+    
     const newTax = {
       CODE: "",
       NAME: formData.taxgroupname.trim(),
@@ -90,13 +128,14 @@ const TaxGroupForm = () => {
         setFormData({ taxgroupname: '' });
         await sleep(1000);
         setStatus(null);
-        setEditStatus(null);
+        ;
         setValidationError(null);
       }
     } catch (error) {
       if (error.response && error.response.status === 400) {
         if (error.response.data === "A tax group with the same name already exists.") {
-            setValidationError('Tax Group name already in use.');
+            
+            setStatus({type: 'error', message: 'Tax Group name already in use.'} );
         } else {
             setValidationError('An error occurred. Please try again.');
         }
@@ -107,6 +146,7 @@ const TaxGroupForm = () => {
   };
 
   const handleEditClick = (group) => {
+    refresherror();
     const newEditingRows = { ...editingRows };
     if (!newEditingRows[group.code]) {
       newEditingRows[group.code] = {
@@ -125,15 +165,8 @@ const TaxGroupForm = () => {
   };
 
   const handleUpdateClick = async (rowCode) => {
-    if (!editingRows[rowCode].taxgroupname.trim()) {
-      setValidationErroredit('Tax Group Name is required');
-      return;
-    }
-
-    if (editingRows[rowCode].taxgroupname.trim().length > 20) {
-      setValidationErroredit('Tax Group Name cannot exceed 20 characters');
-      return;
-    }
+    if(validationcheckfieldsedit(rowCode) === "error")
+      { return; }
     const updatedGroup = {
       code: rowCode,
       name: editingRows[rowCode].taxgroupname.trim(),
@@ -155,8 +188,10 @@ const TaxGroupForm = () => {
     } catch (error) {
       if (error.response && error.response.status === 400) {
         if (error.response.data === "A tax group with the same name already exists.") {
-            setEditStatus({ type: 'error', message: 'Tax Group already in existing record.' });
-        } else {
+          setEditStatus((prevStatuses) => ({
+            ...prevStatuses,
+            [rowCode]: { type: 'error', message: 'Tax Name already in existing record.' }
+          })); } else {
             setValidationError('An error occurred. Please try again.');
         }
     } else {
@@ -167,7 +202,10 @@ const TaxGroupForm = () => {
 
   const handleCancelUpdateClick = (rowCode) => {
     handleTabClose(rowCode);
-    setEditStatus(null);
+    setEditStatus(prevStatuses => ({
+      ...prevStatuses,
+      [rowCode]: null, // or delete prevStatuses[rowCode] if you prefer removing the key entirely
+    })) ;
   };
 
   const handleTabClose = (rowCode) => {
@@ -181,9 +219,10 @@ const TaxGroupForm = () => {
   };
 
   const handleCancel = () => {
+    refresherror();
     setFormData({ taxgroupname: '' });
     setStatus(null);
-    setEditStatus(null);
+    useState({});;
     setValidationError(null);
   };
 
@@ -192,7 +231,7 @@ const TaxGroupForm = () => {
     if (!editTabExists) {
       setTabs([...tabs, { label: 'Tax Group List' }]);
     }
-    const editTabIndex = tabs.findIndex(tab => tab.label === 'State Master List');
+    const editTabIndex = tabs.findIndex(tab => tab.label === 'Tax Group List');
     setTabValue(editTabIndex >= 0 ? editTabIndex : tabs.length);
   };
 
@@ -222,15 +261,11 @@ const TaxGroupForm = () => {
                   onChange={handleChange}
                   variant="outlined"
                   margin="dense"
-                  error={!!validationError}
-                  helperText={validationError}
+                  error={!!validationErrorcheck?.name || !!validationErrorcheck?.length} 
+                  helperText={validationErrorcheck?.name || validationErrorcheck?.length}
                 />
               </Grid>
-              {validationError && (
-                <Typography variant="body2" color="red" style={{ marginTop: 10 }}>
-                  {validationError}
-                </Typography>
-              )}
+             
               {status && (
                 <Typography variant="body2" color={status.type === 'success' ? 'green' : 'red'} style={{ marginTop: 10 }}>
                   {status.message}
@@ -335,13 +370,12 @@ const TaxGroupForm = () => {
                   fullWidth
                   label="Tax Group Name"
                   name="taxgroupname"
-                  value={editingRows[tabs[tabValue].code]?.taxgroupname || ''}
+                  value={editingRows[tabs[tabValue].code]?.taxgroupname.trim() || ''}
                   onChange={(event) => handleEditFormChange(event, tabs[tabValue].code)}
                   variant="outlined"
                   margin="dense"
-                  error={!!validationErroredit}
-                  helperText={validationErroredit}
-                />
+                  error={!!validationErrorcheckedit?.[tabs[tabValue]?.code]?.name || !!validationErrorcheckedit?.[tabs[tabValue]?.code]?.length} 
+                  helperText={validationErrorcheckedit?.[tabs[tabValue]?.code]?.name || validationErrorcheckedit?.[tabs[tabValue]?.code]?.length} />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControlLabel
@@ -356,11 +390,15 @@ const TaxGroupForm = () => {
                   label="Deactivate?"
                 />
               </Grid>
-              {editstatus && (
-                <Typography variant="body2" color={editstatus.type === 'success' ? 'green' : 'red'} style={{ marginTop: 10 }}>
-                  {editstatus.message}
-                </Typography>
-              )}
+              {editstatus[tabs[tabValue]?.code] && (
+                  <Typography 
+                    variant="body2" 
+                    color={editstatus[tabs[tabValue]?.code].type === 'success' ? 'green' : 'yellow'} 
+                    style={{ marginTop: 10 }}
+                  >
+                    {editstatus[tabs[tabValue]?.code].message}
+                  </Typography>
+                )}
             </Paper>
             <Box sx={{ display: 'flex', justifyContent: 'left' }}>
               <Grid container spacing={2} justifyContent="left">
